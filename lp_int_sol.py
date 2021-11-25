@@ -10,14 +10,14 @@ import time
 import numpy as np
 import pandas as pd
 import utilities
-from context import hpt, knockpy
+from context import pyblip, knockpy, hpt
 
 # Specifies the type of simulation
 DIR_TYPE = os.path.split(os.path.abspath(__file__))[1].split(".py")[0]
 
 # columns of dataframe
 COLUMNS = [
-	'seed', 'blip_time', 'num_nodes', 'num_zeros', 'num_ones', 'n_singleton', 'n_rand_pairs', 
+	'seed', 'blip_time', 'num_cand_groups', 'num_zeros', 'num_ones', 'n_singleton', 'n_rand_pairs', 
 	'epower_lp', 'epower_ilp', 'epower_sample', 'nfd', 'fdp', 'power', 'kappa', 'p', 'sparsity', 'covmethod'
 ]
 
@@ -48,7 +48,7 @@ def single_seed_sim(
 	)
 
 	# Run linear spike slab
-	model = hpt.linear.LinearSpikeSlab(
+	model = pyblip.linear.LinearSpikeSlab(
 		X=dgp.X,
 		y=dgp.y,
 		p0=0.99,
@@ -62,9 +62,9 @@ def single_seed_sim(
 	# Calculate PIPs
 	t0 = time.time()
 	q = args.get('q', [0.1])[0]
-	max_pep = args.get('max_pep', [0.25])[0]
+	max_pep = args.get('max_pep', [q])[0]
 	max_size = args.get('max_size', [25])[0]
-	nodes = hpt.calc_peps.fast_sequential_peps_posterior(
+	cand_groups = pyblip.create_groups.sequential_groups(
 		inclusions,
 		q=q,
 		max_pep=max_pep,
@@ -72,7 +72,7 @@ def single_seed_sim(
 		prenarrow=args.get('prenarrow', [1])[0],
 	)
 	dist_matrix = np.abs(1 - np.dot(dgp.X.T, dgp.X))
-	nodes.extend(hpt.calc_peps.tree_peps_posterior(	
+	cand_groups.extend(pyblip.create_groups.hierarchical_groups(	
 			inclusions,
 			dist_matrix=dist_matrix,
 			max_pep=max_pep,
@@ -81,35 +81,35 @@ def single_seed_sim(
 	))
 
 	# Run BLiP
-	rej_nodes = hpt.blr.BLiP(
-		nodes=nodes,
+	detections = pyblip.blip.BLiP(
+		cand_groups=cand_groups,
 		q=q,
-		error='fdr',
+		error='pfer',
 		max_pep=max_pep,
 		perturb=True,
 		how_binarize='intlp'
 	)
-	nfd, fdr, power = utilities.nodrej2power(rej_nodes, dgp.beta)
+	nfd, fdr, power = utilities.nodrej2power(detections, dgp.beta)
 	# Quickly calculate randomized solution
-	rej_nodes_sample = hpt.blr.binarize_selections(
-		nodes=nodes,
+	detections_sample = pyblip.blip.binarize_selections(
+		cand_groups=cand_groups,
 		p=p,
-		nfd_val=sum([n.data['pep'] * n.data['sprob'] for n in nodes]),
-		error='fdr',
+		v_opt=q,
+		error='pfer',
 		how_binarize='sample'
 	)
 
-	epower_lp = sum([node.data['util'] * node.data['sprob'] for node in nodes])
-	epower_ilp = sum([node.data['util'] for node in rej_nodes])
-	epower_sample = sum([node.data['util'] for node in rej_nodes_sample])
+	epower_lp = sum([cg.data['weight'] * cg.data['sprob'] for cg in cand_groups])
+	epower_ilp = sum([cg.data['weight'] for cg in detections])
+	epower_sample = sum([cg.data['weight'] for cg in detections_sample])
 
-	# Count number of non-integer nodes
-	num_zeros, num_ones, n_single, n_pairs = utilities.count_randomized_pairs(nodes)
+	# Count number of non-integer cand_groups
+	num_zeros, num_ones, n_single, n_pairs = utilities.count_randomized_pairs(cand_groups)
 
 	return [
 		seed, 
 		np.around(time.time() - t0, 2),
-		len(nodes),
+		len(cand_groups),
 		num_zeros,
 		num_ones,
 		n_single,
@@ -162,7 +162,7 @@ def main(args):
 					summary_df = out_df.groupby(
 						['covmethod', 'kappa', 'p', 'sparsity']
 					)[[
-						'power', 'fdp', 'n_singleton', 'n_rand_pairs',
+						'power', 'nfd', 'n_singleton', 'n_rand_pairs',
 						'epower_lp', 'epower_ilp', 'epower_sample', 'blip_time']].mean()
 					print(summary_df.reset_index())
 

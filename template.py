@@ -9,7 +9,7 @@ import parser
 import numpy as np
 import pandas as pd
 import utilities
-from context import hpt, knockpy
+from context import pyblip, knockpy
 
 # Specifies the type of simulation
 DIR_TYPE = os.path.split(os.path.abspath(__file__))[1].split(".py")[0]

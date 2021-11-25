@@ -25,21 +25,21 @@ def create_output_directory(args, dir_type='misc'):
 	return output_dir
 	
 def nodrej2power(
-    rej_nodes,
+    detections,
     beta
 ):
     # Calculate FDP
     false_disc = np.array([
-    	np.all(beta[list(n.data['group'])]==0) for n in rej_nodes
+    	np.all(beta[list(n.group)]==0) for n in detections
     ])
     n_false_disc = np.sum(false_disc)
-    fdp = n_false_disc / max(1, len(rej_nodes))
+    fdp = n_false_disc / max(1, len(detections))
 
     # Calculate power
-    utils = np.array([
-    	n.data['util'] for n in rej_nodes
+    weights = np.array([
+    	n.data['weight'] for n in detections
     ])
-    power = np.dot(utils, 1 - false_disc)
+    power = np.dot(weights, 1 - false_disc)
 
     return n_false_disc, fdp, power
 
@@ -56,7 +56,7 @@ def count_randomized_pairs(nodes, tol=1e-5):
 			num_zeros += 1
 		else:
 			nonints.append(node.data['sprob'])
-			nonint_groups.append(set(node.data['group']))
+			nonint_groups.append(set(node.group))
 
 	# Find randomized pairs / singletons lurking about
 	rand_pairs, rand_singletons = _count_rand_pairs_inner(
