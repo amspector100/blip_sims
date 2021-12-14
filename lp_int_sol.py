@@ -6,6 +6,7 @@ import os
 import sys
 import parser
 import time
+import copy
 
 import numpy as np
 import pandas as pd
@@ -62,7 +63,7 @@ def single_seed_sim(
 	# Calculate PIPs
 	t0 = time.time()
 	q = args.get('q', [0.1])[0]
-	max_pep = args.get('max_pep', [q])[0]
+	max_pep = args.get('max_pep', [2*q])[0]
 	max_size = args.get('max_size', [25])[0]
 	cand_groups = pyblip.create_groups.sequential_groups(
 		inclusions,
@@ -84,18 +85,19 @@ def single_seed_sim(
 	detections = pyblip.blip.BLiP(
 		cand_groups=cand_groups,
 		q=q,
-		error='pfer',
+		error='fdr',
 		max_pep=max_pep,
 		perturb=True,
 		how_binarize='intlp'
 	)
 	nfd, fdr, power = utilities.nodrej2power(detections, dgp.beta)
+	v_opt = np.sum([x.pep * x.data['sprob'] for x in cand_groups])
 	# Quickly calculate randomized solution
 	detections_sample = pyblip.blip.binarize_selections(
-		cand_groups=cand_groups,
+		cand_groups=[copy.deepcopy(x) for x in cand_groups],
 		p=p,
-		v_opt=q,
-		error='pfer',
+		v_opt=v_opt,
+		error='fdr',
 		how_binarize='sample'
 	)
 
