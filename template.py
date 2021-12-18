@@ -9,7 +9,7 @@ import parser
 import numpy as np
 import pandas as pd
 import utilities
-from context import pyblip, knockpy
+from context import pyblip
 
 # Specifies the type of simulation
 DIR_TYPE = os.path.split(os.path.abspath(__file__))[1].split(".py")[0]
@@ -32,7 +32,7 @@ def main(args):
 	output_dir = utilities.create_output_directory(args, dir_type=DIR_TYPE)
 
 	# Run outputs
-	outputs = knockpy.utilities.apply_pool(
+	outputs = utilities.apply_pool(
 		func=single_seed_sim,
 		seed=list(range(1, reps+1)), 
 		constant_inputs={'args':args},

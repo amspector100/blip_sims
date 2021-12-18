@@ -11,7 +11,8 @@ import copy
 import numpy as np
 import pandas as pd
 import utilities
-from context import pyblip, knockpy, hpt
+from gen_data import generate_regression_data
+from context import pyblip
 
 # Specifies the type of simulation
 DIR_TYPE = os.path.split(os.path.abspath(__file__))[1].split(".py")[0]
@@ -24,7 +25,7 @@ COLUMNS = [
 
 def single_seed_sim(
 	seed,
-	method,
+	covmethod,
 	kappa,
 	p,
 	sparsity,
@@ -39,25 +40,24 @@ def single_seed_sim(
 
 	# Create data
 	n = int(kappa * p)
-	dgp = knockpy.dgp.DGP()
-	dgp.sample_data(
-		method=method,
+	X, y, beta = generate_regression_data(
+		covmethod=covmethod,
 		n=n,
 		p=p,
 		sparsity=sparsity,
-		coeff_dist=args.get('coeff_dist', ['normal'])[0]
+		coeff_dist=args.get('coeff_dist', ['uniform'])[0]
 	)
 
 	# Run linear spike slab
 	model = pyblip.linear.LinearSpikeSlab(
-		X=dgp.X,
-		y=dgp.y,
+		X=X,
+		y=y,
 		p0=0.99,
 		min_p0=0.9,
 		tau2_a0=20,
 		tau2_b0=10,
 	)
-	model.sample(N=300, chains=10)
+	model.sample(N=1000, chains=10)
 	inclusions = model.betas != 0
 
 	# Calculate PIPs
@@ -72,7 +72,7 @@ def single_seed_sim(
 		max_size=max_size,
 		prenarrow=args.get('prenarrow', [1])[0],
 	)
-	dist_matrix = np.abs(1 - np.dot(dgp.X.T, dgp.X))
+	dist_matrix = np.abs(1 - np.dot(X.T, X))
 	cand_groups.extend(pyblip.create_groups.hierarchical_groups(	
 			inclusions,
 			dist_matrix=dist_matrix,
@@ -88,17 +88,16 @@ def single_seed_sim(
 		error='fdr',
 		max_pep=max_pep,
 		perturb=True,
-		how_binarize='intlp'
+		deterministic=True
 	)
-	nfd, fdr, power = utilities.nodrej2power(detections, dgp.beta)
+	nfd, fdr, power = utilities.nodrej2power(detections, beta)
 	v_opt = np.sum([x.pep * x.data['sprob'] for x in cand_groups])
 	# Quickly calculate randomized solution
 	detections_sample = pyblip.blip.binarize_selections(
 		cand_groups=[copy.deepcopy(x) for x in cand_groups],
-		p=p,
-		v_opt=v_opt,
+		q=q,
 		error='fdr',
-		how_binarize='sample'
+		deterministic=False
 	)
 
 	epower_lp = sum([cg.data['weight'] * cg.data['sprob'] for cg in cand_groups])
@@ -125,7 +124,7 @@ def single_seed_sim(
 		kappa,
 		p,
 		sparsity,
-		method
+		covmethod
 	]
 
 def main(args):
@@ -140,15 +139,15 @@ def main(args):
 
 	# Run outputs
 	all_outputs = []
-	for method in args.get('method', ['ar1']):
+	for covmethod in args.get('covmethod', ['ark']):
 		for p in args.get('p', [500]):
 			for kappa in args.get('kappa',[0.2]):
 				for sparsity in args.get('sparsity', [0.05]):
-					outputs = knockpy.utilities.apply_pool(
+					outputs = utilities.apply_pool(
 						func=single_seed_sim,
 						seed=list(range(1, reps+1)), 
 						constant_inputs=dict(
-							method=method,
+							covmethod=covmethod,
 							kappa=kappa,
 							p=p,
 							sparsity=sparsity,
