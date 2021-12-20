@@ -9,6 +9,9 @@ profile
 # C extensions?
 *.so
 
+# Unfinished sims
+sims/hparam_search.py
+sims/fdr_comp.py
 
 # _____ R Defaults _______
 # History files
