@@ -5,7 +5,8 @@ from scipy import stats
 import unittest
 import pytest
 
-from test_context import hpt, knockpy, utilities
+from test_context import blip_sims
+from blip_sims import utilities
 
 class TestMetrics(unittest.TestCase):
     """ Tests sparse bayesian linear reg """

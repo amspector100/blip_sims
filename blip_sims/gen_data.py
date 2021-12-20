@@ -15,6 +15,7 @@ def generate_regression_data(
 	alphasum=1, # for ark model
 	temp=3, # for hmm
 	rank=10, # for factor model
+	min_coeff=0.1,
 	max_corr=0.99,
 	permute_X=False,
 ):
@@ -81,6 +82,8 @@ def generate_regression_data(
 	kp = np.around(sparsity * p).astype(int) # num non-nulls
 	if coeff_dist == 'normal':
 		nonnull_coefs = np.sqrt(coeff_size) * np.random.randn(kp)
+		small = np.abs(nonnull_coefs) < min_coeff
+		nonnull_coefs[small] = 0.1 * np.sign(nonnull_coefs[small])
 	elif coeff_dist == 'uniform':
 		nonnull_coefs = coeff_size * np.random.uniform(1/2, 1, size=kp)
 		nonnull_coefs *= (1 - 2*np.random.binomial(1, 0.5, size=kp))

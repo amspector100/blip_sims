@@ -7,7 +7,6 @@ import sys
 import datetime
 import json
 import numpy as np
-import rpy2
 from multiprocessing import Pool
 from functools import partial
 
@@ -84,40 +83,15 @@ def apply_pool(func, constant_inputs={}, num_processes=1, **kwargs):
 
     return all_outputs
 
-def run_susie(
-	X,
-	y,
-	L,
-	**kwargs
-):
-	# This code adapted from the polyfun package
-	# load SuSiE R package
-	import rpy2
-	import rpy2.robjects.numpy2ri as numpy2ri
-	import rpy2.robjects as ro
-	ro.conversion.py2ri = numpy2ri
-	numpy2ri.activate()
-	from rpy2.robjects.packages import importr
-	susieR = importr('susieR')
-	R_null = ro.rinterface.NULL
-	# Run susie
-	susie_obj = susieR.susie(
-		X=X, y=y, L=L, **kwargs
-	)
-	# Extract output
-	alphas = susie_obj.rx2('alpha')
-	susie_sets = susie_obj.rx2('sets')[0]
-	susie_sets = [
-		np.array(s)-1 for s in susie_sets
-	]
-	return alphas, susie_sets
-
 def create_output_directory(args, dir_type='misc'):
 	# Date
 	today = str(datetime.date.today())
 	hour = str(datetime.datetime.today().time())
 	hour = hour.replace(':','-').split('.')[0]
-	output_dir = f'data/{dir_type}/{today}/{hour}/'
+	# Output directory
+	file_dir = os.path.dirname(os.path.abspath(__file__))
+	parent_dir = os.path.split(file_dir)[0]
+	output_dir = f'{parent_dir}/data/{dir_type}/{today}/{hour}/'
 	# Ensure directory exists
 	if not os.path.exists(output_dir):
 		os.makedirs(output_dir)
