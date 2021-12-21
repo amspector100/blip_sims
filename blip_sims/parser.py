@@ -31,7 +31,7 @@ def val2list(val):
     if not isinstance(val, list):
         if isinstance(val, np.ndarray):
             if len(val.shape) == 1:
-                return val
+                return val.tolist()
         return [val] 
     return val
 
