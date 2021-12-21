@@ -9,7 +9,15 @@ from statsmodels.stats.multitest import multipletests
 
 from sklearn import linear_model as lm
 
-from tqdm import tqdm
+# Find default solver
+from cvxpy.reductions.solvers.defines import INSTALLED_SOLVERS
+if 'GUROBI' in INSTALLED_SOLVERS:
+	DEFAULT_SOLVER = 'GUROBI'
+elif 'CBC' in INSTALLED_SOLVERS:
+	DEFAULT_SOLVER = 'CBC'
+else:
+	DEFAULT_SOLVER = 'ECOS'
+
 
 def check_mle_unique(X, y):
 	""" Checks if logistic reg. problem is separable """
@@ -24,7 +32,7 @@ def check_mle_unique(X, y):
 	problem = cp.Problem(
 		objective=cp.Maximize(1), constraints=constraints
 	)
-	problem.solve(solver='ECOS')
+	problem.solve(solver=DEFAULT_SOLVER)
 	if problem.status == 'infeasible':
 		return True
 	else:
