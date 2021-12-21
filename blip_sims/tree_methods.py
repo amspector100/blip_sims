@@ -6,6 +6,8 @@ import scipy.spatial.distance as ssd
 from scipy import stats
 from statsmodels.stats.multitest import multipletests
 
+from sklearn import linear_model as lm
+
 class PNode():
 
 	def __init__(
@@ -233,7 +235,7 @@ class RegressionTree():
 			corr_matrix, levels=levels, max_size=max_size
 		)
 
-	def precompute(self):
+	def precompute(self, family):
 		"""
 		Precompute some useful quantities.
 		"""
@@ -241,14 +243,23 @@ class RegressionTree():
 		self.Q, self.R = np.linalg.qr(self.X)
 		self.H = np.dot(self.Q, self.Q.T)
 		# denominator in all F tests
-		self.F_test_denom = np.dot(
-			np.dot(self.y, np.eye(self.n) - self.H), self.y
-		) / (self.n - self.p)
+		if family == 'gaussian':
+			self.F_test_denom = np.dot(
+				np.dot(self.y, np.eye(self.n) - self.H), self.y
+			) / (self.n - self.p)
+		else:
+			# Run logistic regression to get likelihood
+			model = lm.LogisticRegression(penalty='none')
+			model.fit(self.Q, self.y)
+			beta = model.coef_.reshape(-1)
+			mu = np.dot(self.Q, beta)
+			self.ll1 = np.sum(self.y * mu)
+			self.ll1 -= np.sum(np.log(1 + np.exp(mu)))
 
-	def F_test(self, group):
-		
-		# Compute Hneg, projection matrix for all outside of group
-		# Speedups for small groups
+	def _downdate_Q(self, group):
+		"""
+		QR for X with columns in group removed
+		"""
 		neg_group = [j for j in range(self.p) if j not in group]
 		if len(group) < 10:
 			Qneg = self.Q.copy()
@@ -266,6 +277,12 @@ class RegressionTree():
 			assert np.allclose(np.dot(Qneg, Rneg), self.X[:, neg_group])
 		else:
 			Qneg, _ = np.linalg.qr(self.X[:, neg_group])
+		return Qneg
+
+	def F_test(self, group):
+		
+		# Compute Hneg, projection matrix for all outside of group
+		Qneg = self._downdate_Q(group)
 		Hneg = np.dot(Qneg, Qneg.T)
 
 		# Compute F statistic
@@ -278,14 +295,30 @@ class RegressionTree():
 			F, dfn=len(group), dfd=self.n-self.p
 		)
 
+	def lrt_test(self, group):
+		# Precompute q r decomp for speed/numerical stability
+		Qneg = self._downdate_Q(group)
+		model = lm.LogisticRegression(penalty='none')
+		model.fit(Qneg, self.y)
+		beta = model.coef_.reshape(-1)
+		mu = np.dot(Qneg, beta)
+		ll0 = np.sum(self.y * mu)
+		ll0 -= np.sum(np.log(1 + np.exp(mu)))
+		# Compute lrt statistic
+		lrt_stat = -2 * (ll0 - self.ll1)
+		# return p-value
+		return stats.chi2.cdf(
+			lrt_stat, df=len(group)
+		)
+
 	def fit(self, family='gaussian'):
 
 		# For each node, compute a p-value
-		self.precompute()
-		for node in self.ptree:
+		self.precompute(family=family)
+		for node in self.ptree.nodes:
 			if family == 'gaussian':
 				node.p = self.F_test(node.group)
 			elif family == 'binomial':
-				raise NotImplementedError()
+				node.p = self.lrt_test(node.group)
 			else:
 				raise ValueError(f"Unrecognized family={family}")

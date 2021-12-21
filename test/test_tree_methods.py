@@ -91,11 +91,54 @@ class TestTreeMethods(unittest.TestCase):
 			regtree = tm.RegressionTree(
 				X=X, y=y, levels=2, max_size=5
 			)
-			regtree.precompute()
+			regtree.precompute(family='gaussian')
 			pvals[rep] = regtree.F_test(group=group)
+
 		ks_pval = stats.kstest(pvals, cdf='uniform').pvalue
 		if ks_pval < 0.001:
 			raise ValueError("p-values from F-test are not uniform under the null")
+
+		# Just make sure BHQ/Yekutieli don't error
+		regtree.fit(family='gaussian')
+		regtree.ptree.outer_nodes_yekutieli()
+		regtree.ptree.tree_fbh()
+
+	def test_lrt(self):
+
+		# Create simple experiment
+		np.random.seed(1234)
+		reps = 512
+		n = 1000
+		p = 10
+		group = [0,1,2]
+		pvals = np.zeros(reps)
+		for rep in range(reps):
+			# Synthetic data
+			X = np.random.randn(n, p)
+			beta = np.random.randn(p) / np.sqrt(p)
+			beta[group] = 0
+			# Create y
+			mu = np.dot(X, beta)
+			probs = 1.0 / (1.0 + np.exp(mu))
+			y = np.random.binomial(1, probs).astype(int)
+			# Calculate p-value
+			regtree = tm.RegressionTree(
+				X=X, y=y, levels=2, max_size=5
+			)
+			regtree.precompute(family='binomial')
+			pvals[rep] = regtree.lrt_test(group=group)
+
+		for q in [0.1, 0.5, 0.9]:
+			quantile = np.quantile(pvals, q)
+			self.assertTrue(
+				abs(quantile - q) < 1e-1,
+				f"pval {q}th quantile={quantile}, expected {q}"
+			)
+
+		# Just make sure BHQ/Yekutieli don't error
+		regtree.fit(family='binomial')
+		regtree.ptree.outer_nodes_yekutieli()
+		regtree.ptree.tree_fbh()
 
 if __name__ == "__main__":
 	unittest.main()
