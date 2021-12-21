@@ -1,5 +1,6 @@
 import numpy as np
 
+import cvxpy as cp
 import scipy.linalg
 from scipy.cluster import hierarchy
 import scipy.spatial.distance as ssd
@@ -7,6 +8,27 @@ from scipy import stats
 from statsmodels.stats.multitest import multipletests
 
 from sklearn import linear_model as lm
+
+from tqdm import tqdm
+
+def check_mle_unique(X, y):
+	""" Checks if logistic reg. problem is separable """
+	n, p = X.shape
+	beta = cp.Variable(p)
+	y = (y > 0).astype(int)
+	mu = X @ beta
+	constraints = [
+		mu[y == 0] <= 0,
+		mu[y != 0] >= 0
+	]
+	problem = cp.Problem(
+		objective=cp.Maximize(1), constraints=constraints
+	)
+	problem.solve(solver='ECOS')
+	if problem.status == 'infeasible':
+		return True
+	else:
+		return False
 
 class PNode():
 
@@ -201,6 +223,11 @@ def corr_matrix_to_pval_tree(corr_matrix, levels, max_size):
 						break
 				if parent is None:
 					raise ValueError(f"Unexpectedly could not find parent for node={node}")
+
+				if node.group == parent.group:
+					current_level.append(parent)
+					continue
+
 				# Parent/child information
 				node.parent = parent
 				parent.children.append(node)
@@ -261,7 +288,7 @@ class RegressionTree():
 		QR for X with columns in group removed
 		"""
 		neg_group = [j for j in range(self.p) if j not in group]
-		if len(group) < 10:
+		if len(group) < 3:
 			Qneg = self.Q.copy()
 			Rneg = self.R.copy()
 			group = sorted(list(group), key=lambda x: -1*x)
@@ -315,6 +342,13 @@ class RegressionTree():
 
 		# For each node, compute a p-value
 		self.precompute(family=family)
+		# Check separability
+		if family != 'gaussian':
+			if not check_mle_unique(self.X, self.y):
+				for node in self.ptree.nodes:
+					node.p = 1
+				return []
+
 		for node in self.ptree.nodes:
 			if family == 'gaussian':
 				node.p = self.F_test(node.group)

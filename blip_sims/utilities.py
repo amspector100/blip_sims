@@ -101,6 +101,17 @@ def create_output_directory(args, dir_type='misc'):
 		thefile.write(json.dumps(args))
 	# return
 	return output_dir
+
+def susie_power(susie_sets, beta):
+    power = 0
+    nfd = 0
+    for s in susie_sets:
+        if np.any(beta[s] != 0):
+            power += 1 / len(s)
+        else:
+            nfd += 1
+    fdp = nfd / max(1, len(susie_sets))
+    return nfd, fdp, power
 	
 def nodrej2power(
     detections,
@@ -114,9 +125,12 @@ def nodrej2power(
     fdp = n_false_disc / max(1, len(detections))
 
     # Calculate power
-    weights = np.array([
-    	n.data['weight'] for n in detections
-    ])
+    try:
+        weights = np.array([
+        	n.data['weight'] for n in detections
+        ])
+    except AttributeError: # for pval nodes
+        weights = np.array([1 / len(n.group) for n in detections])
     power = np.dot(weights, 1 - false_disc)
 
     return n_false_disc, fdp, power
