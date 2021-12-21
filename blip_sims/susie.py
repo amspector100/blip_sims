@@ -23,7 +23,11 @@ def run_susie(
 	# Extract output
 	alphas = susie_obj.rx2('alpha')
 	susie_sets = susie_obj.rx2('sets')[0]
-	susie_sets = [
-		np.array(s)-1 for s in susie_sets
-	]
+	try:
+		susie_sets = [
+			np.array(s)-1 for s in susie_sets
+		]
+	except TypeError:
+		susie_sets = []
+
 	return alphas, susie_sets

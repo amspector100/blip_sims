@@ -1,4 +1,5 @@
 import numpy as np
+from scipy import stats
 import unittest
 import pytest
 from test_context import blip_sims
@@ -70,6 +71,31 @@ class TestTreeMethods(unittest.TestCase):
 		self.assertEqual(
 			rej_ids, expected, f"Focused BH yields incorrect outer nodes"
 		)
+
+	def test_f_test(self):
+
+		# Create simple experiment
+		np.random.seed(1234)
+		reps = 128
+		n = 500
+		p = 20
+		group = [0,1,2]
+		pvals = np.zeros(reps)
+		for rep in range(reps):
+			# Synthetic data
+			X = np.random.randn(n, p)
+			beta = np.random.randn(p)
+			beta[group] = 0
+			y = np.dot(X, beta) + np.random.randn(n)
+			# Calculate p-value
+			regtree = tm.RegressionTree(
+				X=X, y=y, levels=2, max_size=5
+			)
+			regtree.precompute()
+			pvals[rep] = regtree.F_test(group=group)
+		ks_pval = stats.kstest(pvals, cdf='uniform').pvalue
+		if ks_pval < 0.001:
+			raise ValueError("p-values from F-test are not uniform under the null")
 
 if __name__ == "__main__":
 	unittest.main()
