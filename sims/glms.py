@@ -68,7 +68,7 @@ def single_seed_sim(
 		coeff_size=coeff_size,
 		min_coeff=args.get('min_coeff', [0.1 * coeff_size])[0]
 	)
-	if args.get('well_specified', [1])[0]:
+	if args.get('well_specified', [0])[0]:
 		p0 = 1 - sparsity
 		tau2 = coeff_size
 		sigma2 = 1
