@@ -68,16 +68,33 @@ def single_seed_sim(
 		coeff_size=coeff_size,
 		min_coeff=args.get('min_coeff', [0.1 * coeff_size])[0]
 	)
+	if args.get('well_specified', [1])[0]:
+		p0 = 1 - sparsity
+		tau2 = coeff_size
+		sigma2 = 1
+		update = False
+	else:
+		p0 = 0.99
+		tau2 = 1
+		sigma2 = 1
+		update = True
 
 	# Method type 1: BLiP + SpikeSlab
 	lss_model = pyblip.linear.LinearSpikeSlab(
-		X=X, y=y.astype(np.float64)
+		X=X,
+		y=y.astype(np.float64),
+		p0=p0,
+		update_p0=update,
+		tau2=tau2,
+		update_tau2=update,
+		sigma2=sigma2,
+		update_sigma2=update,
 	)
 	models = [lss_model]
 	method_names = ['LSS + BLiP']
 	if y_dist != 'gaussian':
 		models.append(pyblip.probit.ProbitSpikeSlab(
-			X=X, y=y.astype(int)
+			X=X, y=y.astype(int), p0=p0, update_p0=update
 		))
 		method_names.append('PSS + BLiP')
 	for model, mname in zip(models, method_names):
