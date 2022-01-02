@@ -102,15 +102,15 @@ def create_output_directory(args, dir_type='misc'):
 	# return
 	return output_dir
 
-def susie_power(susie_sets, beta):
+def rejset_power(rej_sets, beta):
     power = 0
     nfd = 0
-    for s in susie_sets:
+    for s in rej_sets:
         if np.any(beta[s] != 0):
             power += 1 / len(s)
         else:
             nfd += 1
-    fdp = nfd / max(1, len(susie_sets))
+    fdp = nfd / max(1, len(rej_sets))
     return nfd, fdp, power
 	
 def nodrej2power(
