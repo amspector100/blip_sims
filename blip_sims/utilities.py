@@ -104,19 +104,19 @@ def create_output_directory(args, dir_type='misc', return_date=False):
 		return output_dir, today, hour
 	return output_dir
 
-def create_dap_prefix(today, hour, seed, **kwargs):
+def create_dap_prefix(today, hour, **kwargs):
 	# Output directory
 	file_dir = os.path.dirname(os.path.abspath(__file__))
 	parent_dir = os.path.split(file_dir)[0]
 	file_prefix = f'{parent_dir}/data/dap_data/{today}/{hour}/'
 	# Add keys
 	for key in kwargs:
-		file_prefix += f"key{kwargs[key]}"
+		file_prefix += f"{key}{kwargs[key]}"
 	file_prefix += "/"
 	# Ensure directory exists
 	if not os.path.exists(file_prefix):
 		os.makedirs(file_prefix)
-	return file_prefix + f"seed{seed}"
+	return file_prefix + "seed"
 
 def rejset_power(rej_sets, beta):
 	power = 0

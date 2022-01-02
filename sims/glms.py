@@ -49,8 +49,7 @@ def single_seed_sim(
 	k,
 	coeff_size,
 	args,
-	today,
-	hour,
+	dap_prefix,
 	tol=1e-3
 ):
 	np.random.seed(seed)
@@ -75,24 +74,21 @@ def single_seed_sim(
 
 	# Method 0: DAP
 	q = args.get('q', [0.1])[0]
-	# Create directory
-	dap_prefix = blip_sims.utilities.create_dap_prefix(
-		today=today, hour=hour, seed=seed
-	)
-	t0 = time.time()
-	rej_dap, _, _ = blip_sims.dap.run_dap(
-		X=X, 
-		y=y, 
-		q=q, 
-		file_prefix=dap_prefix, 
-		pi1=str(sparsity),
-		msize=min(p, 500),
-	)
-	nfd, fdr, power = utilities.rejset_power(rej_dap, beta=beta)
-	dap_time = time.time() - t0
-	output.append(
-		["dap-g", dap_time, 0, power, nfd, fdr, True, 0] + dgp_args
-	)
+	if p <= 1000:
+		t0 = time.time()
+		rej_dap, _, _ = blip_sims.dap.run_dap(
+			X=X, 
+			y=y, 
+			q=q, 
+			file_prefix=dap_prefix + str(seed), 
+			pi1=str(sparsity),
+			msize=str(1.1 * sparsity * p),
+		)
+		nfd, fdr, power = utilities.rejset_power(rej_dap, beta=beta)
+		dap_time = time.time() - t0
+		output.append(
+			["dap-g", dap_time, 0, power, nfd, fdr, True, 0] + dgp_args
+		)
 
 	for well_specified in args.get('well_specified', [False, True]):
 		if well_specified:
@@ -250,6 +246,17 @@ def main(args):
 					for k in args.get('k', [1]):
 						for y_dist in args.get('y_dist', ['gaussian']):
 							for coeff_size in args.get('coeff_size', [1]):
+								dap_prefix = blip_sims.utilities.create_dap_prefix(
+									today=today,
+									hour=hour,
+									covmethod=covmethod,
+									p=p,
+									kappa=kappa,
+									sparsity=sparsity,
+									k=k,
+									y_dist=y_dist,
+									coeff_size=coeff_size,
+								)
 								outputs = utilities.apply_pool(
 									func=single_seed_sim,
 									seed=list(range(1, reps+1)), 
@@ -262,8 +269,7 @@ def main(args):
 										k=k,
 										coeff_size=coeff_size,
 										args=args,
-										today=today,
-										hour=hour,
+										dap_prefix=dap_prefix,
 									),
 									num_processes=num_processes, 
 								)
