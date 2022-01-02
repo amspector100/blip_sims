@@ -86,6 +86,7 @@ def single_seed_sim(
 		q=q, 
 		file_prefix=dap_prefix, 
 		pi1=str(sparsity),
+		msize=min(p, 500),
 	)
 	nfd, fdr, power = utilities.rejset_power(rej_dap, beta=beta)
 	dap_time = time.time() - t0

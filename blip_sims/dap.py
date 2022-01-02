@@ -31,7 +31,7 @@ def create_dap_data(X, y, file_prefix):
 		file.write(f"Syy = {np.power(y, 2).sum()} \n")
 	return 0
 
-def run_dap(X, y, file_prefix, q, pi1=None, threads=1):
+def run_dap(X, y, file_prefix, q, pi1=None, threads=1, msize=None):
 	# Create data
 	create_dap_data(X=X, y=y, file_prefix=file_prefix)
 	# Construct command and run 
@@ -58,6 +58,9 @@ def run_dap(X, y, file_prefix, q, pi1=None, threads=1):
 	cmd.extend(["-l", logfile])
 	if pi1 is not None:
 		cmd.extend(["-pi1", str(pi1)])
+	if msize is None:
+		msize = X.shape[1]
+	cmd.extend(["-msize", str(msize)])
 	process_out = subprocess.run(cmd)
 	# Read file (postprocessing due to dap-G format)
 	indiv_pips = []
