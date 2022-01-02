@@ -27,6 +27,8 @@ COLUMNS = [
 	'power', 
 	'nfd',
 	'fdr',
+	'well_specified',
+	'nsample',
 	'y_dist',
 	'covmethod',
 	'kappa',
@@ -70,16 +72,6 @@ def single_seed_sim(
 		coeff_size=coeff_size,
 		min_coeff=args.get('min_coeff', [0.1 * coeff_size])[0]
 	)
-	if args.get('well_specified', [0])[0]:
-		p0 = 1 - sparsity
-		tau2 = coeff_size
-		sigma2 = 1
-		update = False
-	else:
-		p0 = 0.99
-		tau2 = 1
-		sigma2 = 1
-		update = True
 
 	# Method 0: DAP
 	q = args.get('q', [0.1])[0]
@@ -98,68 +90,89 @@ def single_seed_sim(
 	nfd, fdr, power = utilities.rejset_power(rej_dap, beta=beta)
 	dap_time = time.time() - t0
 	output.append(
-		["dap-g", dap_time, 0, power, nfd, fdr] + dgp_args
+		["dap-g", dap_time, 0, power, nfd, fdr, True, 0] + dgp_args
 	)
 
-	# Method type 1: BLiP + SpikeSlab
-	lss_model = pyblip.linear.LinearSpikeSlab(
-		X=X,
-		y=y.astype(np.float64),
-		p0=p0,
-		update_p0=update,
-		tau2=tau2,
-		update_tau2=update,
-		sigma2=sigma2,
-		update_sigma2=update,
-	)
-	models = [lss_model]
-	method_names = ['LSS + BLiP']
-	if y_dist != 'gaussian':
-		models.append(pyblip.probit.ProbitSpikeSlab(
-			X=X, y=y.astype(int), p0=p0, update_p0=update
-		))
-		method_names.append('PSS + BLiP')
-	for model, mname in zip(models, method_names):
-		t0 = time.time()
-		model.sample(N=1000, chains=10)
-		inclusions = model.betas != 0
-		mtime = time.time() - t0
+	for well_specified in args.get('well_specified', [False, True]):
+		if well_specified:
+			p0 = 1 - sparsity
+			min_p0 = 0.1
+			tau2 = coeff_size
+			sigma2 = 1
+			update = False
+		else:
+			p0 = 0.99
+			min_p0 = 0
+			tau2 = 1
+			sigma2 = 1
+			update = True
 
-		# Calculate PIPs
-		t0 = time.time()
-		max_pep = args.get('max_pep', [2*q])[0]
-		max_size = args.get('max_size', [25])[0]
-		prenarrow = args.get('prenarrow', [0])[0]
-		cand_groups = pyblip.create_groups.sequential_groups(
-			inclusions,
-			q=q,
-			max_pep=max_pep,
-			max_size=max_size,
-			prenarrow=prenarrow,
-		)
-		dist_matrix = np.abs(1 - np.dot(X.T, X))
-		cand_groups.extend(pyblip.create_groups.hierarchical_groups(	
-				inclusions,
-				dist_matrix=dist_matrix,
-				max_pep=max_pep,
-				max_size=max_size,
-				filter_sequential=True,
-		))
+		# Method type 1: BLiP + SpikeSlab
+		# Run Gaussian sampler if (1) not well-specified or (2) gaussian response
+		if y_dist == 'gaussian' or not well_specified:
+			lss_model = pyblip.linear.LinearSpikeSlab(
+				X=X,
+				y=y.astype(np.float64),
+				p0=p0,
+				min_p0=min_p0,
+				update_p0=update,
+				tau2=tau2,
+				update_tau2=update,
+				sigma2=sigma2,
+				update_sigma2=update,
+			)
+			models = [lss_model]
+			method_names = ['LSS + BLiP']
+		else:
+			models = []
+			method_names = []
+		if y_dist != 'gaussian':
+			models.append(pyblip.probit.ProbitSpikeSlab(
+				X=X, y=y.astype(int), p0=p0, update_p0=update, #min_p0=min_p0 TODO
+			))
+			method_names.append('PSS + BLiP')
+		for nsample in args.get("nsample", [1000]):
+			for model, mname in zip(models, method_names):
+				t0 = time.time()
+				model.sample(N=nsample, chains=10)
+				inclusions = model.betas != 0
+				mtime = time.time() - t0
 
-		# Run BLiP
-		detections = pyblip.blip.BLiP(
-			cand_groups=cand_groups,
-			q=q,
-			error='fdr',
-			max_pep=max_pep,
-			perturb=True,
-			deterministic=True
-		)
-		blip_time = time.time() - t0
-		nfd, fdr, power = utilities.nodrej2power(detections, beta)
-		output.append(
-			[mname, mtime, blip_time, power, nfd, fdr] + dgp_args
-		)
+				# Calculate PIPs
+				t0 = time.time()
+				max_pep = args.get('max_pep', [2*q])[0]
+				max_size = args.get('max_size', [25])[0]
+				prenarrow = args.get('prenarrow', [0])[0]
+				cand_groups = pyblip.create_groups.sequential_groups(
+					inclusions,
+					q=q,
+					max_pep=max_pep,
+					max_size=max_size,
+					prenarrow=prenarrow,
+				)
+				dist_matrix = np.abs(1 - np.dot(X.T, X))
+				cand_groups.extend(pyblip.create_groups.hierarchical_groups(	
+						inclusions,
+						dist_matrix=dist_matrix,
+						max_pep=max_pep,
+						max_size=max_size,
+						filter_sequential=True,
+				))
+
+				# Run BLiP
+				detections = pyblip.blip.BLiP(
+					cand_groups=cand_groups,
+					q=q,
+					error='fdr',
+					max_pep=max_pep,
+					perturb=True,
+					deterministic=True
+				)
+				blip_time = time.time() - t0
+				nfd, fdr, power = utilities.nodrej2power(detections, beta)
+				output.append(
+					[mname, mtime, blip_time, power, nfd, fdr, well_specified, nsample] + dgp_args
+				)
 
 	# Method Type 2: susie-based methods
 	t0 = time.time()
@@ -171,7 +184,7 @@ def single_seed_sim(
 		susie_sets, beta
 	)
 	output.append(
-		['susie', susie_time, 0, power, nfd, fdr] + dgp_args
+		['susie', susie_time, 0, power, nfd, fdr, True, 0] + dgp_args
 	)
 	# Now apply BLiP on top of susie
 	t0 = time.time()
@@ -193,7 +206,7 @@ def single_seed_sim(
 	blip_time = time.time() - t0
 	nfd, fdr, power = utilities.nodrej2power(detections, beta)
 	output.append(
-		['susie + BLiP', susie_time, blip_time, power, nfd, fdr] + dgp_args
+		['susie + BLiP', susie_time, blip_time, power, nfd, fdr, True, 0] + dgp_args
 	)
 
 	# Frequentist methods
@@ -202,14 +215,15 @@ def single_seed_sim(
 		regtree = blip_sims.tree_methods.RegressionTree(
 			X=X, y=y, levels=args.get('levels', [10])[0], max_size=max_size
 		)
-		regtree.fit(family=y_dist)
+		regtree.fit(family='gaussian') # this works better than using family = binomial 
+		# even when y follows a binomial distribution
 		mtime = time.time() - t0
 		_, rej_yek = regtree.ptree.outer_nodes_yekutieli(q=q)
 		rej_fbh, _ = regtree.ptree.tree_fbh(q=q)
 		for mname, rej in zip(['FBH', 'Yekutieli'], [rej_fbh, rej_yek]):
 			nfd, fdr, power = utilities.nodrej2power(rej, beta)
 			output.append(
-				[mname, mtime, 0, power, nfd, fdr] + dgp_args
+				[mname, mtime, 0, power, nfd, fdr, True, 0] + dgp_args
 			)
 
 	return output
@@ -258,7 +272,10 @@ def main(args):
 					# Save
 					out_df = pd.DataFrame(all_outputs, columns=COLUMNS)
 					out_df.to_csv(result_path, index=False)
-					groupers = ['method', 'y_dist', 'covmethod', 'kappa', 'p', 'sparsity', 'k']
+					groupers = [
+						'method', 'y_dist', 'covmethod', 'kappa', 
+						'p', 'sparsity', 'k', 'well_specified', 'nsample'
+					]
 					meas = ['model_time', 'power', 'fdr', 'blip_time']
 					summary_df = out_df.groupby(groupers)[meas].mean()
 					print(summary_df.reset_index())
