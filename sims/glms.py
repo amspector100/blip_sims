@@ -47,6 +47,8 @@ def single_seed_sim(
 	k,
 	coeff_size,
 	args,
+	today,
+	hour,
 	tol=1e-3
 ):
 	np.random.seed(seed)
@@ -79,6 +81,26 @@ def single_seed_sim(
 		sigma2 = 1
 		update = True
 
+	# Method 0: DAP
+	q = args.get('q', [0.1])[0]
+	# Create directory
+	dap_prefix = blip_sims.utilities.create_dap_prefix(
+		today=today, hour=hour, seed=seed
+	)
+	t0 = time.time()
+	rej_dap, _, _ = blip_sims.dap.run_dap(
+		X=X, 
+		y=y, 
+		q=q, 
+		file_prefix=dap_prefix, 
+		pi1=str(sparsity),
+	)
+	nfd, fdr, power = utilities.rejset_power(rej_dap, beta=beta)
+	dap_time = time.time() - t0
+	output.append(
+		["dap-g", dap_time, 0, power, nfd, fdr] + dgp_args
+	)
+
 	# Method type 1: BLiP + SpikeSlab
 	lss_model = pyblip.linear.LinearSpikeSlab(
 		X=X,
@@ -105,7 +127,6 @@ def single_seed_sim(
 
 		# Calculate PIPs
 		t0 = time.time()
-		q = args.get('q', [0.1])[0]
 		max_pep = args.get('max_pep', [2*q])[0]
 		max_size = args.get('max_size', [25])[0]
 		prenarrow = args.get('prenarrow', [0])[0]
@@ -146,7 +167,7 @@ def single_seed_sim(
 		X, y, L=np.ceil(p*sparsity)
 	)
 	susie_time = time.time() - t0
-	nfd, fdr, power = blip_sims.utilities.susie_power(
+	nfd, fdr, power = blip_sims.utilities.rejset_power(
 		susie_sets, beta
 	)
 	output.append(
@@ -200,7 +221,9 @@ def main(args):
 	num_processes = args.get('num_processes', [1])[0]
 
 	# Save args, create output dir
-	output_dir = utilities.create_output_directory(args, dir_type=DIR_TYPE)
+	output_dir, today, hour = utilities.create_output_directory(
+		args, dir_type=DIR_TYPE, return_date=True
+	)
 	result_path = output_dir + "/results.csv"
 
 	# Run outputs
@@ -223,7 +246,9 @@ def main(args):
 										sparsity=sparsity,
 										k=k,
 										coeff_size=coeff_size,
-										args=args
+										args=args,
+										today=today,
+										hour=hour,
 									),
 									num_processes=num_processes, 
 								)

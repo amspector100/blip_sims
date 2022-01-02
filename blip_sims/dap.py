@@ -35,10 +35,20 @@ def run_dap(X, y, file_prefix, q, pi1=None, threads=1):
 	# Create data
 	create_dap_data(X=X, y=y, file_prefix=file_prefix)
 	# Construct command and run 
+	# First, locate dap
+	dap_executable = "dap/dap_src/dap-g"
+	for i in range(3):
+		if os.path.exists(dap_executable):
+			break
+		else:
+			dap_executable = "../" + dap_executable
+		if i == 2:
+			raise ValueError("Could not find dap source")
+
 	# Example: dap-g -d_z sim.1.zval.dat -d_ld sim.1.LD.dat -t 4 -o output.zval -l log.zval
 	outfile = file_prefix + "output.zval"
 	logfile = file_prefix + "log.zval"
-	cmd = [f"../dap/dap_src/dap-g"]
+	cmd = [dap_executable]
 	cmd.extend(["-d_z", f"{file_prefix}zval.dat"])
 	cmd.extend(["-d_ld", f"{file_prefix}LD.dat"])
 	cmd.extend(["-d_n", str(X.shape[0])])
