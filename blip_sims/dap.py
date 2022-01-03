@@ -26,9 +26,9 @@ def create_dap_data(X, y, file_prefix):
 		X=ld,
 		delimiter=' ',
 	)
-	with open(file_prefix + "N_syy.dat", 'w') as file:
-		file.write(f"N = {n} \n")
-		file.write(f"Syy = {np.power(y, 2).sum()} \n")
+	# with open(file_prefix + "N_syy.dat", 'w') as file:
+	# 	file.write(f"N = {n} \n")
+	# 	file.write(f"Syy = {np.power(y, 2).sum()} \n")
 	return 0
 
 def run_dap(X, y, file_prefix, q, pi1=None, threads=1, msize=None):
@@ -46,11 +46,13 @@ def run_dap(X, y, file_prefix, q, pi1=None, threads=1, msize=None):
 			raise ValueError("Could not find dap source")
 
 	# Example: dap-g -d_z sim.1.zval.dat -d_ld sim.1.LD.dat -t 4 -o output.zval -l log.zval
+	ldfile = f"{file_prefix}LD.dat"
+	zfile = f"{file_prefix}zval.dat"
 	outfile = file_prefix + "output.zval"
 	logfile = file_prefix + "log.zval"
 	cmd = [dap_executable]
-	cmd.extend(["-d_z", f"{file_prefix}zval.dat"])
-	cmd.extend(["-d_ld", f"{file_prefix}LD.dat"])
+	cmd.extend(["-d_z", zfile])
+	cmd.extend(["-d_ld", ldfile])
 	cmd.extend(["-d_n", str(X.shape[0])])
 	cmd.extend(["-d_syy", str(np.power(y, 2).sum())])
 	cmd.extend(["-t", str(threads)])
@@ -109,4 +111,9 @@ def run_dap(X, y, file_prefix, q, pi1=None, threads=1, msize=None):
 			rej_clusters.append(
 				indiv_pips.loc[indiv_pips['cluster'] == cid, 'feature'].tolist()
 			)
+	# Remove files
+	os.remove(ldfile)
+	os.remove(zfile)
+	os.remove(logfile)
+	os.remove(outfile)
 	return rej_clusters, indiv_pips, models

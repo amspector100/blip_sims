@@ -74,7 +74,7 @@ def single_seed_sim(
 
 	# Method 0: DAP
 	q = args.get('q', [0.1])[0]
-	if p <= 1000:
+	if p <= 1000 and args.get("run_dap", [True])[0]:
 		t0 = time.time()
 		rej_dap, _, _ = blip_sims.dap.run_dap(
 			X=X, 
@@ -238,6 +238,7 @@ def main(args):
 	result_path = output_dir + "/results.csv"
 
 	# Run outputs
+	time0 = time.time()
 	all_outputs = []
 	for covmethod in args.get('covmethod', ['ark']):
 		for p in args.get('p', [500]):
@@ -246,33 +247,32 @@ def main(args):
 					for k in args.get('k', [1]):
 						for y_dist in args.get('y_dist', ['gaussian']):
 							for coeff_size in args.get('coeff_size', [1]):
+								constant_inputs=dict(
+									y_dist=y_dist,
+									covmethod=covmethod,
+									kappa=kappa,
+									p=p,
+									sparsity=sparsity,
+									k=k,
+									coeff_size=coeff_size,
+								)
+								msg = f"Finished with {constant_inputs}"
 								dap_prefix = blip_sims.utilities.create_dap_prefix(
 									today=today,
 									hour=hour,
-									covmethod=covmethod,
-									p=p,
-									kappa=kappa,
-									sparsity=sparsity,
-									k=k,
-									y_dist=y_dist,
-									coeff_size=coeff_size,
+									**constant_inputs,
 								)
+								constant_inputs['args'] = args
+								constant_inputs['dap_prefix'] = dap_prefix
 								outputs = utilities.apply_pool(
 									func=single_seed_sim,
 									seed=list(range(1, reps+1)), 
-									constant_inputs=dict(
-										y_dist=y_dist,
-										covmethod=covmethod,
-										kappa=kappa,
-										p=p,
-										sparsity=sparsity,
-										k=k,
-										coeff_size=coeff_size,
-										args=args,
-										dap_prefix=dap_prefix,
-									),
+									constant_inputs=constant_inputs,
 									num_processes=num_processes, 
 								)
+								msg += f" at {np.around(time.time() - time0, 2)}"
+								print(msg)
+								os.rmdir(os.path.dirname(dap_prefix))
 								for out in outputs:
 									all_outputs.extend(out)
 
