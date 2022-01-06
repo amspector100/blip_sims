@@ -2,6 +2,29 @@
 import numpy as np
 from scipy import stats
 
+def create_sparse_coefficients(
+	p,
+	sparsity,
+	coeff_dist,
+	coeff_size,
+	min_coeff=0.1
+):
+
+	# Create sparse coefficients,
+	beta = np.zeros(p)
+	kp = np.around(sparsity * p).astype(int) # num non-nulls
+	if coeff_dist == 'normal':
+		nonnull_coefs = np.sqrt(coeff_size) * np.random.randn(kp)
+		small = np.abs(nonnull_coefs) < min_coeff
+		nonnull_coefs[small] = 0.1 * np.sign(nonnull_coefs[small])
+	elif coeff_dist == 'uniform':
+		nonnull_coefs = coeff_size * np.random.uniform(1/2, 1, size=kp)
+		nonnull_coefs *= (1 - 2*np.random.binomial(1, 0.5, size=kp))
+	else:
+		raise ValueError(f"Unrecognized coeff_dist={coeff_dist}")
+	beta[np.random.choice(np.arange(p), kp, replace=False)] = nonnull_coefs
+	return beta
+
 def generate_regression_data(
 	n=100,
 	p=500,
@@ -77,19 +100,11 @@ def generate_regression_data(
 		np.random.shuffle(perminds)
 		X = np.ascontiguousarray(X[:, perminds])
 
-	# Create sparse coefficients,
-	beta = np.zeros(p)
-	kp = np.around(sparsity * p).astype(int) # num non-nulls
-	if coeff_dist == 'normal':
-		nonnull_coefs = np.sqrt(coeff_size) * np.random.randn(kp)
-		small = np.abs(nonnull_coefs) < min_coeff
-		nonnull_coefs[small] = 0.1 * np.sign(nonnull_coefs[small])
-	elif coeff_dist == 'uniform':
-		nonnull_coefs = coeff_size * np.random.uniform(1/2, 1, size=kp)
-		nonnull_coefs *= (1 - 2*np.random.binomial(1, 0.5, size=kp))
-	else:
-		raise ValueError(f"Unrecognized coeff_dist={coeff_dist}")
-	beta[np.random.choice(np.arange(p), kp, replace=False)] = nonnull_coefs
+	# Beta
+	beta = create_sparse_coefficients(
+		p=p, sparsity=sparsity, coeff_dist=coeff_dist, 
+		coeff_size=coeff_size, min_coeff=min_coeff
+	)
 
 	# Create Y
 	mu = np.dot(X, beta)
@@ -105,3 +120,23 @@ def generate_regression_data(
 		raise ValueError(f"unrecognized y_dist=={y_dist}")
 
 	return X, y, beta
+
+def gen_changepoint_data(
+	T=100,
+	coeff_size=1,
+	coeff_dist='normal',
+	min_coeff=0.1,
+	sigma=1,
+	sparsity=0.01
+):
+	beta = create_sparse_coefficients(
+		p=T, sparsity=sparsity, coeff_dist=coeff_dist, 
+		coeff_size=coeff_size, min_coeff=min_coeff,
+	)
+	beta[0] = 0
+	Y = np.random.randn(T) + np.cumsum(beta)
+	# In case we want to use a dummy X variable for regression
+	X = np.ones((T, T))
+	for j in range(T):
+		X[0:j, j] = 0
+	return X, Y, beta

@@ -74,7 +74,7 @@ def single_seed_sim(
 
 	# Method 0: DAP
 	q = args.get('q', [0.1])[0]
-	if p <= 1000 and args.get("run_dap", [True])[0]:
+	if p <= 1000 and args.get("run_dap", [False])[0]:
 		t0 = time.time()
 		rej_dap, _, _ = blip_sims.dap.run_dap(
 			X=X, 
@@ -93,13 +93,13 @@ def single_seed_sim(
 	for well_specified in args.get('well_specified', [False, True]):
 		if well_specified:
 			p0 = 1 - sparsity
-			min_p0 = 0.1
+			min_p0 = 0
 			tau2 = coeff_size
 			sigma2 = 1
 			update = False
 		else:
 			p0 = 0.99
-			min_p0 = 0
+			min_p0 = 0.9
 			tau2 = 1
 			sigma2 = 1
 			update = True
@@ -134,7 +134,9 @@ def single_seed_sim(
 				model.sample(N=nsample, chains=10)
 				inclusions = model.betas != 0
 				mtime = time.time() - t0
-
+				#print(f"min_p0={min_p0}")
+				#print(model.p0s.mean())
+				#print(model.p0s)
 				# Calculate PIPs
 				t0 = time.time()
 				max_pep = args.get('max_pep', [2*q])[0]
@@ -172,39 +174,40 @@ def single_seed_sim(
 				)
 
 	# Method Type 2: susie-based methods
-	t0 = time.time()
-	susie_alphas, susie_sets = blip_sims.susie.run_susie(
-		X, y, L=np.ceil(p*sparsity)
-	)
-	susie_time = time.time() - t0
-	nfd, fdr, power = blip_sims.utilities.rejset_power(
-		susie_sets, beta
-	)
-	output.append(
-		['susie', susie_time, 0, power, nfd, fdr, True, 0] + dgp_args
-	)
-	# Now apply BLiP on top of susie
-	t0 = time.time()
-	cand_groups = pyblip.create_groups.susie_groups(
-		alphas=susie_alphas, 
-		X=X, 
-		q=q,
-		prenarrow=prenarrow,
-		max_size=max_size
-	)
-	detections = pyblip.blip.BLiP(
-		cand_groups=cand_groups,
-		q=q,
-		error='fdr',
-		max_pep=max_pep,
-		perturb=True,
-		deterministic=True
-	)
-	blip_time = time.time() - t0
-	nfd, fdr, power = utilities.nodrej2power(detections, beta)
-	output.append(
-		['susie + BLiP', susie_time, blip_time, power, nfd, fdr, True, 0] + dgp_args
-	)
+	if args.get('run_susie', [True])[0]:
+		t0 = time.time()
+		susie_alphas, susie_sets = blip_sims.susie.run_susie(
+			X, y, L=np.ceil(p*sparsity), q=q
+		)
+		susie_time = time.time() - t0
+		nfd, fdr, power = blip_sims.utilities.rejset_power(
+			susie_sets, beta
+		)
+		output.append(
+			['susie', susie_time, 0, power, nfd, fdr, True, 0] + dgp_args
+		)
+		# Now apply BLiP on top of susie
+		t0 = time.time()
+		cand_groups = pyblip.create_groups.susie_groups(
+			alphas=susie_alphas, 
+			X=X, 
+			q=q,
+			prenarrow=prenarrow,
+			max_size=max_size
+		)
+		detections = pyblip.blip.BLiP(
+			cand_groups=cand_groups,
+			q=q,
+			error='fdr',
+			max_pep=max_pep,
+			perturb=True,
+			deterministic=True
+		)
+		blip_time = time.time() - t0
+		nfd, fdr, power = utilities.nodrej2power(detections, beta)
+		output.append(
+			['susie + BLiP', susie_time, blip_time, power, nfd, fdr, True, 0] + dgp_args
+		)
 
 	# Frequentist methods
 	if kappa > 1:
@@ -276,16 +279,16 @@ def main(args):
 								for out in outputs:
 									all_outputs.extend(out)
 
-					# Save
-					out_df = pd.DataFrame(all_outputs, columns=COLUMNS)
-					out_df.to_csv(result_path, index=False)
-					groupers = [
-						'method', 'y_dist', 'covmethod', 'kappa', 
-						'p', 'sparsity', 'k', 'well_specified', 'nsample'
-					]
-					meas = ['model_time', 'power', 'fdr', 'blip_time']
-					summary_df = out_df.groupby(groupers)[meas].mean()
-					print(summary_df.reset_index())
+								# Save
+								out_df = pd.DataFrame(all_outputs, columns=COLUMNS)
+								out_df.to_csv(result_path, index=False)
+								groupers = [
+									'method', 'y_dist', 'covmethod', 'kappa', 
+									'p', 'sparsity', 'k', 'well_specified', 'nsample'
+								]
+								meas = ['model_time', 'power', 'fdr', 'blip_time']
+								summary_df = out_df.groupby(groupers)[meas].mean()
+								print(summary_df.reset_index())
 
 
 
