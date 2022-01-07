@@ -123,10 +123,16 @@ def single_seed_sim(
 	)
 	susie_time = time.time() - t0
 	susie_sets = [x for x in susie_sets if len(x) < max_size]
-	# Adjust by one for changepoint detection
+	# Adjust by one for changepoint detection and remove meaningless
+	# detections (corresponds to index p)
 	susie_sets = [
 		x + 1 for x in susie_sets
 	]
+	for j in range(len(susie_sets)):
+		susie_sets[j] = susie_sets[j][susie_sets[j] != p]
+	
+	
+
 	nfd, fdr, power = blip_sims.utilities.rejset_power(
 		susie_sets, beta
 	)
@@ -170,6 +176,7 @@ def single_seed_sim(
 def main(args):
 	# Parse arguments
 	args = parser.parse_args(args)
+	print(args['description'])
 	reps = args.get('reps', [1])[0]
 	num_processes = args.get('num_processes', [1])[0]
 
@@ -182,6 +189,7 @@ def main(args):
 	# Run outputs
 	time0 = time.time()
 	all_outputs = []
+	seed_start = max(args.get('seed_start', [1])[0], 1)
 	for p in args.get('p', [500]):
 		for sparsity in args.get('sparsity', [0.05]):
 			for coeff_size in args.get('coeff_size', [1]):
@@ -194,7 +202,7 @@ def main(args):
 				constant_inputs['args'] = args
 				outputs = utilities.apply_pool(
 					func=single_seed_sim,
-					seed=list(range(1, reps+1)), 
+					seed=list(range(seed_start, reps+seed_start)), 
 					constant_inputs=constant_inputs,
 					num_processes=num_processes, 
 				)

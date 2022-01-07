@@ -231,6 +231,8 @@ def single_seed_sim(
 def main(args):
 	# Parse arguments
 	args = parser.parse_args(args)
+	print(args['description'])
+	sys.stdout.flush()
 	reps = args.get('reps', [1])[0]
 	num_processes = args.get('num_processes', [1])[0]
 
@@ -243,6 +245,7 @@ def main(args):
 	# Run outputs
 	time0 = time.time()
 	all_outputs = []
+	seed_start = max(args.get('seed_start', [1])[0], 1)
 	for covmethod in args.get('covmethod', ['ark']):
 		for p in args.get('p', [500]):
 			for kappa in args.get('kappa',[0.2]):
@@ -269,7 +272,7 @@ def main(args):
 								constant_inputs['dap_prefix'] = dap_prefix
 								outputs = utilities.apply_pool(
 									func=single_seed_sim,
-									seed=list(range(1, reps+1)), 
+									seed=list(range(seed_start, reps+seed_start)), 
 									constant_inputs=constant_inputs,
 									num_processes=num_processes, 
 								)
