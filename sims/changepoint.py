@@ -62,7 +62,7 @@ def single_seed_sim(
 	for well_specified in args.get('well_specified', [False, True]):
 		if well_specified:
 			p0 = 1 - sparsity
-			min_p0 = 0.8
+			min_p0 = 0.9
 			tau2 = coeff_size
 			sigma2 = 1
 			update = False
