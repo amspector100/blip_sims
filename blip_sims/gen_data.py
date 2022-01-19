@@ -41,7 +41,19 @@ def generate_regression_data(
 	min_coeff=0.1,
 	max_corr=0.99,
 	permute_X=False,
+	dgp_seed=None,
 ):
+	# if dgp_seed is not None, ensure data-generating 
+	# process (dgp) is constant
+	rstate = np.random.get_state() # save old state
+	np.random.seed(dgp_seed) # only for creating dgp
+
+	# Beta
+	beta = create_sparse_coefficients(
+		p=p, sparsity=sparsity, coeff_dist=coeff_dist, 
+		coeff_size=coeff_size, min_coeff=min_coeff
+	)
+
 	# Generate X-data
 	covmethod = str(covmethod).lower()
 	if covmethod == 'ark' or covmethod == 'hmm':
@@ -53,6 +65,8 @@ def generate_regression_data(
 		rhos[:, 0] = np.maximum(rhos[:, 0], 1 - max_corr)
 		rhos = rhos / rhos.sum(axis=1).reshape(-1, 1) # ensure sums to 1
 		rhos = np.sqrt(rhos)
+		# Ensure data is not constant
+		np.random.set_state(rstate)
 		Z = np.random.randn(n, p)
 		for j in range(1, p):
 			zstart = max(0, j-k)
@@ -77,6 +91,8 @@ def generate_regression_data(
 		noise = np.random.randn(p, rank) / np.sqrt(rank)
 		V = np.diag(diag_entries) + np.dot(noise, noise.T)
 		L = np.linalg.cholesky(V)
+		# Ensure data is not constant
+		np.random.set_state(rstate)
 		X = np.dot(np.random.randn(n, p), L.T)
 	# This is a cool idea, but it is not PSD.
 	# elif covmethod == 'block_decay':
@@ -99,12 +115,6 @@ def generate_regression_data(
 		perminds = np.arange(p)
 		np.random.shuffle(perminds)
 		X = np.ascontiguousarray(X[:, perminds])
-
-	# Beta
-	beta = create_sparse_coefficients(
-		p=p, sparsity=sparsity, coeff_dist=coeff_dist, 
-		coeff_size=coeff_size, min_coeff=min_coeff
-	)
 
 	# Create Y
 	mu = np.dot(X, beta)

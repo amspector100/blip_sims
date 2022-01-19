@@ -4,11 +4,15 @@ Utility functions for simulations.
 
 import os
 import sys
+import time
 import datetime
 import json
 import numpy as np
 from multiprocessing import Pool
 from functools import partial
+
+def elapsed(t0):
+	return np.around(time.time() - t0, 2)
 
 ### Multiprocessing helper
 def _one_arg_function(list_of_inputs, args, func, kwargs):
