@@ -403,7 +403,8 @@ def compute_bayesian_pvals(
 	using binning to compute the p-values.
 	"""
 	t0 = time.time()
-	p = sample_kwargs.pop('p', 500)
+	p = sample_kwargs.get('p', 500)
+	print(f"I think p={p}")
 	sample_kwargs.pop('kappa', None) # unnecessary
 
 	# Get parameters of data generating process
@@ -438,6 +439,7 @@ def compute_bayesian_pvals(
 		b = np.loadtxt(fb)
 		b = b != 0
 		for i in range(ngroups):
+			g = list(group_dict[i])
 			pep = 1 - np.any(b[:, g], axis=1).mean()
 			peps[i].append(pep)
 	print(f"Computing oracle pvals, peps finished at {elapsed(t0)}")
