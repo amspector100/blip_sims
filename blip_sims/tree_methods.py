@@ -377,124 +377,128 @@ class RegressionTree():
 ### Functions for computing p-values with oracle test-statistics
 ### based on posterior error probabilities.
 def group_metrics(gid, g, Sigma, beta):
-    g = list(g)
-    bnull = beta.copy()
-    bnull[g] = 0
-    null_cov = np.dot(Sigma, beta)
-    mean_null_cov = np.mean(np.abs(null_cov[g]))
-    return {
-        'id':gid,
-        'size':len(g),
-        'group':sorted(g),
-        'mean_null_cov':mean_null_cov,
-        'null':np.all(beta[g] == 0),
-    }
+	g = list(g)
+	bnull = beta.copy()
+	bnull[g] = 0
+	null_cov = np.dot(Sigma, beta)
+	mean_null_cov = np.mean(np.abs(null_cov[g]))
+	return {
+		'id':gid,
+		'size':len(g),
+		'group':sorted(g),
+		'mean_null_cov':mean_null_cov,
+		'null':np.all(beta[g] == 0),
+	}
 
 def compute_bayesian_pvals(
-    beta_samples, 
-    dgp_seed,
-    sample_kwargs,
-    qbins,
-    levels=8,
-    max_size=25,
+	beta_fnames, 
+	dgp_seed,
+	sample_kwargs,
+	qbins,
+	levels=8,
+	max_size=25,
 ):
-    """
-    Computes p values based on bayesian posterior error probabilities
-    using binning to compute the p-values.
-    """
-    t0 = time.time()
-    beta_samples = [b != 0 for b in beta_samples]
-    p = beta_samples[0].shape[1]
-    sample_kwargs.pop('kappa', None) # unnecessary
+	"""
+	Computes p values based on bayesian posterior error probabilities
+	using binning to compute the p-values.
+	"""
+	t0 = time.time()
+	p = sample_kwargs.pop('p', 500)
+	sample_kwargs.pop('kappa', None) # unnecessary
 
-    # Get parameters of data generating process
-    X, y, beta = gen_data.generate_regression_data(
-    	dgp_seed=dgp_seed, 
-    	n=50*p,
-    	**sample_kwargs
-    )
-    print(f"Computing oracle pvals, sampling done at {elapsed(t0)}")
+	# Get parameters of data generating process
+	X, y, beta = gen_data.generate_regression_data(
+		dgp_seed=dgp_seed, 
+		n=50*p,
+		**sample_kwargs
+	)
+	print(f"Computing oracle pvals, sampling done at {elapsed(t0)}")
 
-    Sigma = np.cov(X.T) # cov matrix
-    # Create regtree to create groupings
-    regtree = RegressionTree(
-        X=X, y=y, levels=levels, max_size=max_size
-    )
-    # Calculate PEPs
-    peps = dict()
-    groups = [n.group for n in regtree.ptree.nodes]
-    ngroups = len(groups)
-    # Maps index to group
-    group_attr = {}
-    group_dict = {i:list(g) for i, g in enumerate(groups)}
-    for i in range(ngroups):
-        peps[i] = list()
-        g = list(group_dict[i])
-        group_attr[i] = group_metrics(
-            gid=i, g=g, Sigma=Sigma, beta=beta
-        )
-        for b in beta_samples:
-            pep = 1 - np.any(b[:, g], axis=1).mean()
-            peps[i].append(pep)
-    print(f"Computing oracle pvals, peps finished at {elapsed(t0)}")
+	Sigma = np.cov(X.T) # cov matrix
+	# Create regtree to create groupings
+	regtree = RegressionTree(
+		X=X, y=y, levels=levels, max_size=max_size
+	)
+	# Calculate PEPs
+	peps = dict()
+	groups = [n.group for n in regtree.ptree.nodes]
+	ngroups = len(groups)
+	# Maps index to group
+	group_attr = {}
+	group_dict = {i:list(g) for i, g in enumerate(groups)}
+	# Initialize metadata
+	for i in range(ngroups):
+		peps[i] = list()
+		g = list(group_dict[i])
+		group_attr[i] = group_metrics(
+			gid=i, g=g, Sigma=Sigma, beta=beta
+		)
+	# Compute peps
+	for fb in beta_fnames:
+		b = np.loadtxt(fb)
+		b = b != 0
+		for i in range(ngroups):
+			pep = 1 - np.any(b[:, g], axis=1).mean()
+			peps[i].append(pep)
+	print(f"Computing oracle pvals, peps finished at {elapsed(t0)}")
 
-    # Group by metrics based on quantiles
-    group_attr = pd.DataFrame.from_dict(
-        group_attr, orient='index'
-    )
-    group_attr['mnc_bin'] = pd.qcut(
-        group_attr['mean_null_cov'], q=qbins
-    )
-    size_bins = [0, 1, 2, 3, 5, 10, 15]
-    if max_size >= 15:
-    	size_bins.append(max_size + 1)
-    group_attr['size_bin'] = pd.cut(
-        group_attr['size'], bins=size_bins
-    )
+	# Group by metrics based on quantiles
+	group_attr = pd.DataFrame.from_dict(
+		group_attr, orient='index'
+	)
+	group_attr['mnc_bin'] = pd.qcut(
+		group_attr['mean_null_cov'], q=qbins
+	)
+	size_bins = [0, 1, 2, 3, 5, 10, 15]
+	if max_size >= 15:
+		size_bins.append(max_size + 1)
+	group_attr['size_bin'] = pd.cut(
+		group_attr['size'], bins=size_bins
+	)
 
-    # Perform binning to find reference for p-values
-    ref_dict = dict()
-    for s in group_attr['size_bin'].unique():
-        for c in group_attr['mnc_bin'].unique():
-            sub = group_attr.loc[
-                (group_attr['size_bin'] == s) &
-                (group_attr['mnc_bin'] == c)
-            ]
-            if sub.shape[0] == 0:
-                continue
+	# Perform binning to find reference for p-values
+	ref_dict = dict()
+	for s in group_attr['size_bin'].unique():
+		for c in group_attr['mnc_bin'].unique():
+			sub = group_attr.loc[
+				(group_attr['size_bin'] == s) &
+				(group_attr['mnc_bin'] == c)
+			]
+			if sub.shape[0] == 0:
+				continue
 
-            # have to make the bin bigger if there are no nulls
-            # with which can compute a reference distribution
-            if np.sum(sub['null']) == 0:
-                ref = group_attr.loc[
-                    group_attr['size_bin'] == s
-                ]
-                if np.sum(ref['null']) == 0:
-                    ref = group_attr
-            else:
-                ref = sub
+			# have to make the bin bigger if there are no nulls
+			# with which can compute a reference distribution
+			if np.sum(sub['null']) == 0:
+				ref = group_attr.loc[
+					group_attr['size_bin'] == s
+				]
+				if np.sum(ref['null']) == 0:
+					ref = group_attr
+			else:
+				ref = sub
 
-            # Label the other indices with which to compute
-            # the reference distribution
-            ref_dict[(s, c)] = ref.loc[ref['null'], 'id'].unique().tolist()
-    print(f"Computing oracle pvals, ref dists finished at {elapsed(t0)}")
+			# Label the other indices with which to compute
+			# the reference distribution
+			ref_dict[(s, c)] = ref.loc[ref['null'], 'id'].unique().tolist()
+	print(f"Computing oracle pvals, ref dists finished at {elapsed(t0)}")
 
-    # Compute p-values
-    pvals = dict() # maps node id to list of p-values
-    ref_dist_dict = dict()
-    for i in range(ngroups):
-        s = group_attr.loc[i, 'size_bin']
-        c = group_attr.loc[i, 'mnc_bin']
-        ref_dist_dict[i] = np.array([
-            x for j in ref_dict[(s,c)] for x in peps[j]
-        ])
-        ref_dist = ref_dist_dict[i]
-        counts = np.sum(
-            np.array(peps[i]).reshape(-1, 1) > ref_dist.reshape(1, -1),
-            axis=1
-        )
-        pvals[i] = (counts + 1) / (ref_dist.shape[0] + 1)
-        pvals[i] = pvals[i].tolist()
+	# Compute p-values
+	pvals = dict() # maps node id to list of p-values
+	ref_dist_dict = dict()
+	for i in range(ngroups):
+		s = group_attr.loc[i, 'size_bin']
+		c = group_attr.loc[i, 'mnc_bin']
+		ref_dist_dict[i] = np.array([
+			x for j in ref_dict[(s,c)] for x in peps[j]
+		])
+		ref_dist = ref_dist_dict[i]
+		counts = np.sum(
+			np.array(peps[i]).reshape(-1, 1) > ref_dist.reshape(1, -1),
+			axis=1
+		)
+		pvals[i] = (counts + 1) / (ref_dist.shape[0] + 1)
+		pvals[i] = pvals[i].tolist()
 
-    print(f"Oracle pvals done at {elapsed(t0)}.")
-    return pvals, group_attr, group_dict, peps, beta, regtree
+	print(f"Oracle pvals done at {elapsed(t0)}.")
+	return pvals, group_attr, group_dict, peps, beta, regtree

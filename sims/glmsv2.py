@@ -311,12 +311,11 @@ def main(args):
 								beta_fnames = [
 									post_prefix + str(seed) + ".txt" for seed in seeds 								
 								]
-								beta_samples = [np.loadtxt(bf) for bf in beta_fnames]
 								print(f"Finished loading beta samples, took {blip_sims.utilities.elapsed(t0)}.")
 
 								# Step 2: calculate p-values
 								p_out = blip_sims.tree_methods.compute_bayesian_pvals(
-									beta_samples=beta_samples,
+									beta_fnames=beta_fnames,
 									dgp_seed=DGP_SEED,
 									sample_kwargs=sample_kwargs,
 									qbins=np.arange(11) / 10,
