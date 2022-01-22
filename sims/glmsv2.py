@@ -158,7 +158,7 @@ def single_seed_sim(
 					max_size=max_size,
 					prenarrow=prenarrow,
 				)
-				dist_matrix = np.abs(1 - np.dot(X.T, X))
+				dist_matrix = np.abs(1 - np.corrcoef(X.T))
 				cand_groups.extend(pyblip.create_groups.hierarchical_groups(	
 						inclusions,
 						dist_matrix=dist_matrix,
@@ -324,7 +324,7 @@ def main(args):
 									sample_kwargs=sample_kwargs,
 									qbins=np.arange(11) / 10,
 									levels=args.get('levels', [10])[0],
-									max_size=args.get('max_size', [25])[0],
+									max_size=args.get('freq_max_size', [25])[0],
 									how_compute=args.get('how_compute', ['ref_dist'])[0],
 								)
 								pvals, group_attr, group_dict, peps, beta, regtree = p_out # unpack

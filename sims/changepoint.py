@@ -58,6 +58,11 @@ def single_seed_sim(
 		min_coeff=args.get('min_coeff', [0.1 * coeff_size])[0]
 	)
 	q = args.get('q', [0.1])[0]
+	max_pep = args.get('max_pep', [2*q])[0]
+	max_size = args.get('max_size', [25])[0]
+	prenarrow = args.get('prenarrow', [0])[0]
+	chains = args.get('chains', [10])[0]
+
 	# Method type 1: BLiP + SpikeSlab
 	for well_specified in args.get('well_specified', [False, True]):
 		if well_specified:
@@ -85,17 +90,17 @@ def single_seed_sim(
 		)
 		for nsample in args.get("nsample", [5000]):
 			t0 = time.time()
-			model.sample(N=nsample, chains=10)
+			model.sample(N=nsample, chains=chains)
 			# Add inclusions
 			mtime = time.time() - t0
 
 			# Calculate PIPs
 			t0 = time.time()
-			max_pep = args.get('max_pep', [2*q])[0]
-			max_size = args.get('max_size', [25])[0]
-			prenarrow = args.get('prenarrow', [0])[0]
-			cand_groups = pyblip.changepoint.changepoint_cand_groups(
-				model=model,
+			inclusions = model.betas != 0
+			inclusions[:, 0] = 0
+			cand_groups = pyblip.create_groups.all_cand_groups(
+				inclusions=inclusions,
+				X=X,
 				q=q,
 				max_pep=max_pep,
 				max_size=max_size,
@@ -116,7 +121,35 @@ def single_seed_sim(
 				['LSS + BLiP', mtime, blip_time, power, nfd, fdr, well_specified, nsample] + dgp_args
 			)
 
-	# Method Type 2: susie-based methods
+			# Method Type 2: BCP + BLiP
+			t0 = time.time()
+			inclusions = blip_sims.bcp.run_bcp(
+				y=Y, nsample=nsample, chains=chains, 
+				p0=1-sparsity if well_specified else 0.1, 
+				w0=1/(coeff_size + 1) if well_specified else 0.2 
+			)
+			mtime = time.time() - t0
+			t0 = time.time()
+			cand_groups = pyblip.create_groups.all_cand_groups(
+				inclusions=inclusions, q=q, max_pep=max_pep, max_size=max_size, prenarrow=prenarrow
+			)
+			# Run BLiP
+			detections = pyblip.blip.BLiP(
+				cand_groups=cand_groups,
+				q=q,
+				error='fdr',
+				max_pep=max_pep,
+				perturb=True,
+				deterministic=True
+			)
+			blip_time = time.time() - t0
+			nfd, fdr, power = utilities.nodrej2power(detections, beta)
+			output.append(
+				['BCP + BLiP', mtime, blip_time, power, nfd, fdr, well_specified, nsample] + dgp_args
+			)
+
+
+	# Method Type 3: susie-based methods
 	t0 = time.time()
 	susie_alphas, susie_sets = blip_sims.susie.run_susie_trendfilter(
 		Y, 0, L=np.ceil(p*sparsity), q=q
@@ -143,11 +176,13 @@ def single_seed_sim(
 	t0 = time.time()
 	if susie_alphas is not None:
 		susie_alphas = susie_alphas[:, 0:-1]
-		cand_groups = pyblip.create_groups.sequential_groups(
-			susie_alphas=susie_alphas, 
+		cand_groups = pyblip.create_groups.susie_groups(
+			alphas=susie_alphas,
+			X=X[:, 1:],
 			q=q,
 			prenarrow=prenarrow,
-			max_size=max_size
+			max_size=max_size,
+			max_pep=max_pep
 		)
 		detections = pyblip.blip.BLiP(
 			cand_groups=cand_groups,

@@ -12,6 +12,7 @@ profile
 # Unfinished sims
 sims/hparam_search.py
 sims/fdr_comp.py
+sims/cgroups.py
 
 # _____ R Defaults _______
 # History files
