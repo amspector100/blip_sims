@@ -194,7 +194,7 @@ def corr_matrix_to_pval_tree(corr_matrix, levels, max_size):
 	subset = link[max_group_sizes < max_size]
 
 	# Create cutoffs
-	spacing = int(subset.shape[0] / levels)
+	spacing = max(1, int(subset.shape[0] / levels))
 	cutoffs = subset[:, 2]
 
 	# Add 0 to beginning (this is our baseline - no groups)
@@ -378,15 +378,20 @@ class RegressionTree():
 ### based on posterior error probabilities.
 def group_metrics(gid, g, Sigma, beta):
 	g = list(g)
+	nnulls = np.where(beta != 0)[0]
 	bnull = beta.copy()
 	bnull[g] = 0
 	null_cov = np.dot(Sigma, beta)
 	mean_null_cov = np.mean(np.abs(null_cov[g]))
+	dist_to_nnull = np.min(np.abs(
+		np.array(g).reshape(1, -1) - nnulls.reshape(-1, 1)
+	))
 	return {
 		'id':gid,
 		'size':len(g),
 		'group':sorted(g),
 		'mean_null_cov':mean_null_cov,
+		'dist_to_nnull':dist_to_nnull,
 		'null':np.all(beta[g] == 0),
 	}
 
@@ -397,6 +402,7 @@ def compute_bayesian_pvals(
 	qbins,
 	levels=8,
 	max_size=25,
+	how_compute='ref_dist',
 ):
 	"""
 	Computes p values based on bayesian posterior error probabilities
@@ -404,7 +410,8 @@ def compute_bayesian_pvals(
 	"""
 	t0 = time.time()
 	p = sample_kwargs.get('p', 500)
-	print(f"I think p={p}")
+	sparsity = sample_kwargs.get('sparsity', 0.05)
+	p0 = 1 - sparsity
 	sample_kwargs.pop('kappa', None) # unnecessary
 
 	# Get parameters of data generating process
@@ -436,7 +443,7 @@ def compute_bayesian_pvals(
 		)
 	# Compute peps
 	for fb in beta_fnames:
-		b = np.loadtxt(fb)
+		b = np.load(fb)
 		b = b != 0
 		for i in range(ngroups):
 			g = list(group_dict[i])
@@ -457,50 +464,97 @@ def compute_bayesian_pvals(
 	group_attr['size_bin'] = pd.cut(
 		group_attr['size'], bins=size_bins
 	)
+	group_attr['dist_bin'] = pd.cut(
+		group_attr['dist_to_nnull'], bins=[0, 2, 4, 6, np.inf], right=False
+	)
+
+	# Bin by size of bin and sim_metric
+	sim_metric = 'mnc_bin'
+	if how_compute == 'bayes_rule':
+		reps = len(peps[0])
+		pvals = dict()
+		for s in group_attr['size_bin'].unique():
+			for c in group_attr[sim_metric].unique():
+				sub = group_attr.loc[
+					(group_attr['size_bin'] == s) &
+					(group_attr[sim_metric] == c)
+				]
+				if sub.shape[0] == 0:
+					continue
+				ids = sorted(sub['id'].unique().tolist())
+				# pep_bin is peps from ids concatenated in order
+				sizes = []
+				pep_bin = []
+				for j in ids:
+					size = len(group_dict[j])
+					pep_bin.extend(peps[j])
+					sizes.extend([size for _ in range(reps)])
+				pep_bin = np.maximum(0, np.array(pep_bin)) # clip floating point errors
+				sizes = np.array(sizes)
+				# Compute P(pep <= observed value)
+				r = pep_bin.shape[0]
+				sortinds = np.argsort(pep_bin)
+				rev_inds = np.zeros(r).astype(int)
+				for i, j in enumerate(sortinds):
+					rev_inds[j] = i
+				marg = rev_inds / pep_bin.shape[0]
+				# Compute P(null | Pepj <= observed value)
+				sortpeps = pep_bin[sortinds]
+				pnull = np.cumsum(sortpeps) / np.arange(1, r+1)
+				pnull = pnull[rev_inds]
+				# Compute pvals
+				denom = np.exp(sizes * np.log(p0))
+				pvals_bin = marg * pnull / denom
+				
+				# Add to pvals dictionary
+				for i, j in enumerate(ids):
+					pvals[j] = pvals_bin[int(i*reps):int((i+1)*reps)].tolist()
+		
 
 	# Perform binning to find reference for p-values
-	ref_dict = dict()
-	for s in group_attr['size_bin'].unique():
-		for c in group_attr['mnc_bin'].unique():
-			sub = group_attr.loc[
-				(group_attr['size_bin'] == s) &
-				(group_attr['mnc_bin'] == c)
-			]
-			if sub.shape[0] == 0:
-				continue
-
-			# have to make the bin bigger if there are no nulls
-			# with which can compute a reference distribution
-			if np.sum(sub['null']) == 0:
-				ref = group_attr.loc[
-					group_attr['size_bin'] == s
+	else:
+		ref_dict = dict()
+		for s in group_attr['size_bin'].unique():
+			for c in group_attr[sim_metric].unique():
+				sub = group_attr.loc[
+					(group_attr['size_bin'] == s) &
+					(group_attr[sim_metric] == c)
 				]
-				if np.sum(ref['null']) == 0:
-					ref = group_attr
-			else:
-				ref = sub
+				if sub.shape[0] == 0:
+					continue
 
-			# Label the other indices with which to compute
-			# the reference distribution
-			ref_dict[(s, c)] = ref.loc[ref['null'], 'id'].unique().tolist()
-	print(f"Computing oracle pvals, ref dists finished at {elapsed(t0)}")
+				# have to make the bin bigger if there are no nulls
+				# with which can compute a reference distribution
+				if np.sum(sub['null']) == 0:
+					ref = group_attr.loc[
+						group_attr['size_bin'] == s
+					]
+					if np.sum(ref['null']) == 0:
+						ref = group_attr
+				else:
+					ref = sub
 
-	# Compute p-values
-	pvals = dict() # maps node id to list of p-values
-	ref_dist_dict = dict()
-	for i in range(ngroups):
-		s = group_attr.loc[i, 'size_bin']
-		c = group_attr.loc[i, 'mnc_bin']
-		ref_dist_dict[i] = np.array([
-			x for j in ref_dict[(s,c)] for x in peps[j]
-		])
-		ref_dist = ref_dist_dict[i]
-		counts = np.sum(
-			np.array(peps[i]).reshape(-1, 1) > ref_dist.reshape(1, -1),
-			axis=1
-		)
-		pvals[i] = (counts + 1) / (ref_dist.shape[0] + 1)
-		pvals[i] = pvals[i].tolist()
+				# Label the other indices with which to compute
+				# the reference distribution
+				ref_dict[(s, c)] = ref.loc[ref['null'], 'id'].unique().tolist()
+		print(f"Computing oracle pvals, ref dists finished at {elapsed(t0)}")
+
+		# Compute p-values
+		pvals = dict() # maps node id to list of p-values
+		ref_dist_dict = dict()
+		for i in range(ngroups):
+			s = group_attr.loc[i, 'size_bin']
+			c = group_attr.loc[i, sim_metric]
+			ref_dist_dict[i] = np.array([
+				x for j in ref_dict[(s,c)] for x in peps[j]
+			])
+			ref_dist = ref_dist_dict[i]
+			counts = np.sum(
+				np.array(peps[i]).reshape(-1, 1) > ref_dist.reshape(1, -1),
+				axis=1
+			)
+			pvals[i] = (counts + 1) / (ref_dist.shape[0] + 1)
+			pvals[i] = pvals[i].tolist()
 
 	print(f"Oracle pvals done at {elapsed(t0)}.")
 	return pvals, group_attr, group_dict, peps, beta, regtree

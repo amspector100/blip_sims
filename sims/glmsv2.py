@@ -136,7 +136,11 @@ def single_seed_sim(
 		for nsample in args.get("nsample", [1000]):
 			for model, mname in zip(models, method_names):
 				t0 = time.time()
-				model.sample(N=nsample, chains=10)
+				model.sample(
+					N=nsample, 
+					chains=args.get("chains", [10])[0],
+					burn=int(0.1*nsample)
+				)
 				inclusions = model.betas != 0
 				mtime = time.time() - t0
 				#print(f"min_p0={min_p0}")
@@ -182,8 +186,8 @@ def single_seed_sim(
 				# for use as test-statistics for frequentist methods
 				if well_specified:
 					post_prefix = dap_prefix.replace('dap_data', 'oracle_pval')
-					np.savetxt(
-						post_prefix + str(seed) + ".txt",
+					np.save(
+						post_prefix + str(seed) + ".npy",
 						model.betas
 					)
 
@@ -309,7 +313,7 @@ def main(args):
 								# Step 1: load posterior samples
 								t0 = time.time()
 								beta_fnames = [
-									post_prefix + str(seed) + ".txt" for seed in seeds 								
+									post_prefix + str(seed) + ".npy" for seed in seeds 								
 								]
 								print(f"Finished loading beta samples, took {blip_sims.utilities.elapsed(t0)}.")
 
@@ -321,12 +325,19 @@ def main(args):
 									qbins=np.arange(11) / 10,
 									levels=args.get('levels', [10])[0],
 									max_size=args.get('max_size', [25])[0],
+									how_compute=args.get('how_compute', ['ref_dist'])[0],
 								)
 								pvals, group_attr, group_dict, peps, beta, regtree = p_out # unpack
 
+								# Print/check calibration
+								calib = utilities.check_pep_calibration(
+									beta=beta, peps=peps, group_dict=group_dict
+								)
+								print(calib)
+
 								# Step 3: cache p-values and peps
 								group_attr.to_csv(post_prefix + "group_attr.csv")
-								np.savetxt(post_prefix + "beta.txt", beta)
+								np.savetxt(post_prefix + "beta.npy", (beta != 0).astype(bool))
 								for obj, file in zip(
 									[pvals, group_dict, peps], ['pvals', 'group_dict', 'peps']
 								):
