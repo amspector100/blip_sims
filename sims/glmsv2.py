@@ -133,14 +133,17 @@ def single_seed_sim(
 				X=X, y=y.astype(int), p0=p0, update_p0=update, #min_p0=min_p0 TODO
 			))
 			method_names.append('PSS + BLiP')
+		chains = args.get("chains", [10])[0]
+		bsize = args.get("bsize", [1])[0]
 		for nsample in args.get("nsample", [1000]):
 			for model, mname in zip(models, method_names):
 				t0 = time.time()
-				model.sample(
-					N=nsample, 
-					chains=args.get("chains", [10])[0],
-					burn=int(0.1*nsample)
-				)
+				# Assemble arguments for sampling
+				skwargs = {'N':nsample, 'chains':chains, 'burn':int(0.1*nsample)}
+				if y_dist == 'gaussian':
+					skwargs['bsize']= bsize
+				# Sample
+				model.sample(**skwargs)
 				inclusions = model.betas != 0
 				mtime = time.time() - t0
 				#print(f"min_p0={min_p0}")

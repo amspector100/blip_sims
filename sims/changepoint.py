@@ -62,6 +62,7 @@ def single_seed_sim(
 	max_size = args.get('max_size', [25])[0]
 	prenarrow = args.get('prenarrow', [0])[0]
 	chains = args.get('chains', [10])[0]
+	bsize = args.get('bsize', [1])[0]
 
 	# Method type 1: BLiP + SpikeSlab
 	for well_specified in args.get('well_specified', [False, True]):
@@ -90,7 +91,7 @@ def single_seed_sim(
 		)
 		for nsample in args.get("nsample", [5000]):
 			t0 = time.time()
-			model.sample(N=nsample, chains=chains)
+			model.sample(N=nsample, chains=chains, bsize=bsize)
 			# Add inclusions
 			mtime = time.time() - t0
 
