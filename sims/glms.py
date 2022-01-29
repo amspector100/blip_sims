@@ -22,9 +22,11 @@ DIR_TYPE = os.path.split(os.path.abspath(__file__))[1].split(".py")[0]
 # columns of dataframe
 COLUMNS = [
 	'method',
+	'cgroups',
 	'model_time',
 	'blip_time',
 	'power', 
+	'ntd',
 	'nfd',
 	'fdr',
 	'well_specified',
@@ -60,7 +62,7 @@ def single_seed_sim(
 
 	# Create data
 	n = int(kappa * p)
-	X, y, beta = generate_regression_data(
+	sample_kwargs = dict(
 		y_dist=y_dist,
 		covmethod=covmethod,
 		n=n,
@@ -69,8 +71,11 @@ def single_seed_sim(
 		k=k,
 		coeff_dist=args.get('coeff_dist', ['normal'])[0],
 		coeff_size=coeff_size,
-		min_coeff=args.get('min_coeff', [0.1 * coeff_size])[0]
+		min_coeff=args.get('min_coeff', [0.1 * coeff_size])[0],
+		dgp_seed=seed,
+		return_cov=True
 	)
+	X, y, beta, V = generate_regression_data(**sample_kwargs)
 
 	# Method 0: DAP
 	q = args.get('q', [0.1])[0]
@@ -85,11 +90,52 @@ def single_seed_sim(
 			msize=str(1.1 * sparsity * p),
 		)
 		nfd, fdr, power = utilities.rejset_power(rej_dap, beta=beta)
+		ntd = len(rej_dap) - nfd
 		dap_time = time.time() - t0
 		output.append(
-			["dap-g", dap_time, 0, power, nfd, fdr, True, 0] + dgp_args
+			["dap-g", "NA", dap_time, 0, power, ntd, nfd, fdr, True, 0] + dgp_args
 		)
 
+	# Parse args for cand groups
+	max_pep = args.get('max_pep', [2*q])[0]
+	max_size = args.get('max_size', [25])[0]
+	prenarrow = args.get('prenarrow', [0])[0]	
+	levels = args.get('levels', [8])[0]
+	# F-tests + FBH/Yekutieli
+	if kappa > 1 and args.get('run_ftests', [False])[0]:
+		t0 = time.time()
+		regtree = blip_sims.tree_methods.RegressionTree(
+			X=X, y=y, levels=levels, max_size=max_size
+		)
+		regtree.fit(family='gaussian') # this works better than using family = binomial 
+		# even when y follows a binomial distribution
+		mtime = time.time() - t0
+		_, rej_yek = regtree.ptree.outer_nodes_yekutieli(q=q)
+		rej_fbh, _ = regtree.ptree.tree_fbh(q=q)
+		for mname, rej in zip(['FBH', 'Yekutieli'], [rej_fbh, rej_yek]):
+			nfd, fdr, power = utilities.nodrej2power(rej, beta)
+			ntd = len(rej) - nfd
+			output.append(
+				[mname, "fbh", mtime, 0, power, ntd, nfd, fdr, True, 0] + dgp_args
+			)
+	# CRT + FBH/Yekutieli
+	if args.get('run_crt', [True])[0]:
+		t0 = time.time()
+		screen = args.get('screen', [False])[0]
+		# Run CRT
+		crt_model = blip_sims.crt.MultipleDCRT(y=y, X=X, Sigma=V, screen=screen)
+		crt_model.multiple_pvals(levels=levels, max_size=max_size)
+		mtime = time.time() - t0
+		_, rej_yek = crt_model.pTree.outer_nodes_yekutieli(q=q)
+		rej_fbh, _ = crt_model.pTree.tree_fbh(q=q)
+		for mname, rej in zip(['CRT + FBH', 'CRT + Yekutieli'], [rej_fbh, rej_yek]):
+			nfd, fdr, power = utilities.nodrej2power(rej, beta)
+			ntd = len(rej) - nfd
+			output.append(
+				[mname, "fbh", mtime, 0, power, ntd, nfd, fdr, True, 0] + dgp_args
+			)
+
+	# Gibbs + BLiP
 	for well_specified in args.get('well_specified', [False, True]):
 		if well_specified:
 			p0 = 1 - sparsity
@@ -140,44 +186,56 @@ def single_seed_sim(
 				model.sample(**skwargs)
 				inclusions = model.betas != 0
 				mtime = time.time() - t0
-				#print(f"min_p0={min_p0}")
-				#print(model.p0s.mean())
-				#print(model.p0s)
-				# Calculate PIPs
-				t0 = time.time()
-				max_pep = args.get('max_pep', [2*q])[0]
-				max_size = args.get('max_size', [25])[0]
-				prenarrow = args.get('prenarrow', [0])[0]
-				cand_groups = pyblip.create_groups.sequential_groups(
-					inclusions,
-					q=q,
-					max_pep=max_pep,
-					max_size=max_size,
-					prenarrow=prenarrow,
-				)
-				dist_matrix = np.abs(1 - np.corrcoef(X.T))
-				cand_groups.extend(pyblip.create_groups.hierarchical_groups(	
-						inclusions,
-						dist_matrix=dist_matrix,
-						max_pep=max_pep,
-						max_size=max_size,
-						filter_sequential=True,
-				))
+				# Calculate PIPs and cand groups
+				for cgroup in args.get('cgroups', ['all', 'seq', 'fbh']):
+					t0 = time.time()
+					if cgroup == 'all':
+						cand_groups = pyblip.create_groups.all_cand_groups(
+							inclusions=inclusions,
+							q=q,
+							max_pep=max_pep,
+							max_size=max_size,
+							prenarrow=prenarrow
+						)
+					elif cgroup == 'seq':
+						cand_groups = pyblip.create_groups.sequential_groups(
+							inclusions,
+							q=q,
+							max_pep=max_pep,
+							max_size=max_size,
+							prenarrow=prenarrow,
+						)
+					elif cgroup == 'fbh':
+						if not args.get('run_crt', [True])[0]:
+							continue
+						else:
+							groups = [x.group for x in crt_model.pTree.nodes]
+							peps = [
+								1 - np.any(inclusions[:, list(g)], axis=1).mean() for g in groups
+							]
+							cand_groups = [
+								pyblip.create_groups.CandidateGroup(
+									pep=pep, group=g
+								) for pep, g in zip(peps, groups)
+							]
+					else:
+						raise ValueError(f"Unrecognized cgroup={cgroup}")
 
-				# Run BLiP
-				detections = pyblip.blip.BLiP(
-					cand_groups=cand_groups,
-					q=q,
-					error='fdr',
-					max_pep=max_pep,
-					perturb=True,
-					deterministic=True
-				)
-				blip_time = time.time() - t0
-				nfd, fdr, power = utilities.nodrej2power(detections, beta)
-				output.append(
-					[mname, mtime, blip_time, power, nfd, fdr, well_specified, nsample] + dgp_args
-				)
+					# Run BLiP
+					detections = pyblip.blip.BLiP(
+						cand_groups=cand_groups,
+						q=q,
+						error='fdr',
+						max_pep=max_pep,
+						perturb=True,
+						deterministic=True
+					)
+					blip_time = time.time() - t0
+					nfd, fdr, power = utilities.nodrej2power(detections, beta)
+					ntd = len(detections) - nfd
+					output.append(
+						[mname, cgroup, mtime, blip_time, power, ntd, nfd, fdr, well_specified, nsample] + dgp_args
+					)
 
 	# Method Type 2: susie-based methods
 	if args.get('run_susie', [True])[0]:
@@ -189,8 +247,9 @@ def single_seed_sim(
 		nfd, fdr, power = blip_sims.utilities.rejset_power(
 			susie_sets, beta
 		)
+		ntd = len(susie_sets) - nfd
 		output.append(
-			['susie', susie_time, 0, power, nfd, fdr, True, 0] + dgp_args
+			['susie', 'susie', susie_time, 0, power, ntd, nfd, fdr, True, 0] + dgp_args
 		)
 		# Now apply BLiP on top of susie
 		t0 = time.time()
@@ -211,27 +270,11 @@ def single_seed_sim(
 		)
 		blip_time = time.time() - t0
 		nfd, fdr, power = utilities.nodrej2power(detections, beta)
+		ntd = len(detections) - nfd
 		output.append(
-			['susie + BLiP', susie_time, blip_time, power, nfd, fdr, True, 0] + dgp_args
+			['susie + BLiP', "susie", susie_time, blip_time, power, ntd, nfd, fdr, True, 0] + dgp_args
 		)
-
-	# Frequentist methods
-	if kappa > 1:
-		t0 = time.time()
-		regtree = blip_sims.tree_methods.RegressionTree(
-			X=X, y=y, levels=args.get('levels', [10])[0], max_size=max_size
-		)
-		regtree.fit(family='gaussian') # this works better than using family = binomial 
-		# even when y follows a binomial distribution
-		mtime = time.time() - t0
-		_, rej_yek = regtree.ptree.outer_nodes_yekutieli(q=q)
-		rej_fbh, _ = regtree.ptree.tree_fbh(q=q)
-		for mname, rej in zip(['FBH', 'Yekutieli'], [rej_fbh, rej_yek]):
-			nfd, fdr, power = utilities.nodrej2power(rej, beta)
-			output.append(
-				[mname, mtime, 0, power, nfd, fdr, True, 0] + dgp_args
-			)
-
+		
 	return output
 
 def main(args):
@@ -292,10 +335,10 @@ def main(args):
 								out_df = pd.DataFrame(all_outputs, columns=COLUMNS)
 								out_df.to_csv(result_path, index=False)
 								groupers = [
-									'method', 'y_dist', 'covmethod', 'kappa', 
+									'method', 'cgroups', 'y_dist', 'covmethod', 'kappa', 
 									'p', 'sparsity', 'k', 'well_specified', 'nsample'
 								]
-								meas = ['model_time', 'power', 'fdr', 'blip_time']
+								meas = ['model_time', 'blip_time', 'power', 'ntd', 'fdr']
 								summary_df = out_df.groupby(groupers)[meas].mean()
 								print(summary_df.reset_index())
 

@@ -41,6 +41,7 @@ def generate_regression_data(
 	min_coeff=0.1,
 	max_corr=0.99,
 	permute_X=False,
+	return_cov=False, # for CRT return cov matrix
 	dgp_seed=None,
 ):
 	# if dgp_seed is not None, ensure data-generating 
@@ -65,18 +66,28 @@ def generate_regression_data(
 		rhos[:, 0] = np.maximum(rhos[:, 0], 1 - max_corr)
 		rhos = rhos / rhos.sum(axis=1).reshape(-1, 1) # ensure sums to 1
 		rhos = np.sqrt(rhos)
+
+		# Compute eta so that the autoregressive process is equivalent to
+		# Z = etas @ W for W i.i.d. standard normals
+		etas = np.zeros((p, p))
+		etas[0, 0] = 1
+		for j in range(1, p):
+			# Account for correlations between Xj and X_{1:j-1} 
+			rhoend = min(j+1, k+1)
+			for i, r in enumerate(np.flip(rhos[j-1,1:rhoend])):
+				etas[j] += etas[j-i-1] * r
+			# Rescale so Var(Xj) = 1
+			scale = np.sqrt((1 - rhos[j-1, 0]**2) / np.power(etas[j], 2).sum())
+			etas[j] = etas[j] * scale
+			# Add extra noise
+			etas[j, j] = rhos[j-1, 0]
+
 		# Ensure data is not constant
 		np.random.set_state(rstate)
-		Z = np.random.randn(n, p)
-		for j in range(1, p):
-			zstart = max(0, j-k)
-			rhoend = min(j+1, k+1)
-			Z[:, j] = np.dot(
-				Z[:, zstart:(j+1)], np.flip(rhos[j-1, 0:rhoend])
-			)
-			# Keep variance stationary
-			if k != 1:
-				Z[:, j] = Z[:, j] / Z[:, j].std()
+		W = np.random.randn(n, p)
+		Z = np.dot(W, etas.T)
+		V = np.dot(etas, etas.T)
+
 		if covmethod == 'ark':
 			X = Z
 		else:
@@ -129,6 +140,9 @@ def generate_regression_data(
 	else:
 		raise ValueError(f"unrecognized y_dist=={y_dist}")
 
+	# Return covariance, useful for CRT
+	if return_cov:
+		return X, y, beta, V
 	return X, y, beta
 
 def gen_changepoint_data(

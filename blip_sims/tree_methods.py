@@ -50,7 +50,8 @@ class PNode():
 		p=None, # p-value
 		parent=None,
 		children=None,
-		node_id=None
+		node_id=None,
+		data=None,
 	):
 		self.p = p
 		self.group = set(group)
@@ -58,6 +59,9 @@ class PNode():
 		self.children = children if children is not None else []
 		self.synth_root = False
 		self.node_id = node_id
+		if data is None:
+			data = {}
+		self.data = data
 
 	def mark_synth_root(self):
 		self.synth_root = True

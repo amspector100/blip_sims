@@ -167,7 +167,7 @@ def nodrej2power(
 		weights = np.array([
 			n.data['weight'] for n in detections
 		])
-	except AttributeError: # for pval nodes
+	except KeyError: # for pval nodes
 		weights = np.array([1 / len(n.group) for n in detections])
 	power = np.dot(weights, 1 - false_disc)
 
