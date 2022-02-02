@@ -7,7 +7,8 @@ def create_sparse_coefficients(
 	sparsity,
 	coeff_dist,
 	coeff_size,
-	min_coeff=0.1
+	min_coeff=0.1,
+	spacing='random'
 ):
 
 	# Create sparse coefficients,
@@ -22,7 +23,27 @@ def create_sparse_coefficients(
 		nonnull_coefs *= (1 - 2*np.random.binomial(1, 0.5, size=kp))
 	else:
 		raise ValueError(f"Unrecognized coeff_dist={coeff_dist}")
-	beta[np.random.choice(np.arange(p), kp, replace=False)] = nonnull_coefs
+	# Decide location of non-nulls
+	if spacing == 'random':
+		nnulls = np.random.choice(np.arange(p), kp, replace=False)
+	elif spacing == 1:
+		nnulls = (np.arange(kp) + np.random.randint(0, p-kp+1)) % p
+	else:
+		max_spacing = np.floor(p / kp)
+		spacing = max(1, min(spacing, max_spacing - 1))
+		diff = min(spacing - 1, max_spacing - spacing)
+		spacings = np.random.randint(spacing - diff, spacing + diff, size=kp)
+		nnulls = np.unique(np.cumsum(spacings) % p)
+		# If there are duplicates, just randomly sample a few more
+		if nnulls.shape[0] != kp:
+			extra_nnulls = np.random.choice(
+				list(set(np.arange(p).tolist()) - set(nnulls.tolist())), 
+				kp - nnulls.shape[0], 
+				replace=False
+			)
+			nnulls = np.concatenate((nnulls, extra_nnulls))
+	
+	beta[nnulls] = nonnull_coefs
 	return beta
 
 def generate_regression_data(
@@ -150,12 +171,16 @@ def gen_changepoint_data(
 	coeff_size=1,
 	coeff_dist='normal',
 	min_coeff=0.1,
-	sigma=1,
+	spacing='random',
 	sparsity=0.01
 ):
 	beta = create_sparse_coefficients(
-		p=T, sparsity=sparsity, coeff_dist=coeff_dist, 
-		coeff_size=coeff_size, min_coeff=min_coeff,
+		p=T, 
+		sparsity=sparsity, 
+		coeff_dist=coeff_dist, 
+		coeff_size=coeff_size,
+		min_coeff=min_coeff,
+		spacing=spacing,
 	)
 	beta[0] = 0
 	Y = np.random.randn(T) + np.cumsum(beta)

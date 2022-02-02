@@ -32,6 +32,7 @@ COLUMNS = [
 	'p',
 	'sparsity',
 	'coeff_size',
+	'spacing',
 	'seed', 
 ]
 
@@ -40,19 +41,20 @@ def single_seed_sim(
 	p,
 	sparsity,
 	coeff_size,
+	spacing,
 	args,
-	tol=1e-3
 ):
 	np.random.seed(seed)
 	output = []
 	dgp_args = [
-		p, sparsity, coeff_size, seed
+		p, sparsity, coeff_size, spacing, seed
 	]
 
 	# Create data
 	X, Y, beta = gen_changepoint_data(
 		T=p,
 		sparsity=sparsity,
+		spacing=spacing,
 		coeff_dist=args.get('coeff_dist', ['normal'])[0],
 		coeff_size=coeff_size,
 		min_coeff=args.get('min_coeff', [0.1 * coeff_size])[0]
@@ -62,7 +64,7 @@ def single_seed_sim(
 	max_size = args.get('max_size', [25])[0]
 	prenarrow = args.get('prenarrow', [0])[0]
 	chains = args.get('chains', [10])[0]
-	bsize = args.get('bsize', [1])[0]
+	bsize = args.get('bsize', [5])[0]
 
 	# Method type 1: BLiP + SpikeSlab
 	for well_specified in args.get('well_specified', [False, True]):
@@ -229,33 +231,35 @@ def main(args):
 	for p in args.get('p', [500]):
 		for sparsity in args.get('sparsity', [0.05]):
 			for coeff_size in args.get('coeff_size', [1]):
-				constant_inputs=dict(
-					p=p,
-					sparsity=sparsity,
-					coeff_size=coeff_size,
-				)
-				msg = f"Finished with {constant_inputs}"
-				constant_inputs['args'] = args
-				outputs = utilities.apply_pool(
-					func=single_seed_sim,
-					seed=list(range(seed_start, reps+seed_start)), 
-					constant_inputs=constant_inputs,
-					num_processes=num_processes, 
-				)
-				msg += f" at {np.around(time.time() - time0, 2)}"
-				print(msg)
-				for out in outputs:
-					all_outputs.extend(out)
+				for spacing in args.get('spacing', ['random']):
+					constant_inputs=dict(
+						p=p,
+						sparsity=sparsity,
+						coeff_size=coeff_size,
+						spacing=spacing,
+					)
+					msg = f"Finished with {constant_inputs}"
+					constant_inputs['args'] = args
+					outputs = utilities.apply_pool(
+						func=single_seed_sim,
+						seed=list(range(seed_start, reps+seed_start)), 
+						constant_inputs=constant_inputs,
+						num_processes=num_processes, 
+					)
+					msg += f" at {np.around(time.time() - time0, 2)}"
+					print(msg)
+					for out in outputs:
+						all_outputs.extend(out)
 
-				# Save
-				out_df = pd.DataFrame(all_outputs, columns=COLUMNS)
-				out_df.to_csv(result_path, index=False)
-				groupers = [
-					'method', 'p', 'sparsity', 'coeff_size', 'well_specified', 'nsample'
-				]
-				meas = ['model_time', 'power', 'fdr', 'blip_time']
-				summary_df = out_df.groupby(groupers)[meas].mean()
-				print(summary_df.reset_index())
+					# Save
+					out_df = pd.DataFrame(all_outputs, columns=COLUMNS)
+					out_df.to_csv(result_path, index=False)
+					groupers = [
+						'method', 'spacing', 'p', 'sparsity', 'coeff_size', 'well_specified', 'nsample'
+					]
+					meas = ['model_time', 'power', 'fdr', 'blip_time']
+					summary_df = out_df.groupby(groupers)[meas].mean()
+					print(summary_df.reset_index())
 
 
 
