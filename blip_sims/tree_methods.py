@@ -167,16 +167,18 @@ class PTree():
 				output.extend(self.find_subtree(child))
 			return output
 
-def corr_matrix_to_pval_tree(corr_matrix, levels, max_size):
+def corr_matrix_to_pval_tree(corr_matrix, levels, max_size, return_levels):
 	"""
 	Hierarchically clusters based on a distance matrix,
 	then cuts the clustering tree at ``levels`` different
-	locations between no groupings and the first grouping
+	locations between no groupings and the maximum grouping
 	exceeding the max_size.
 
 	Returns
 	-------
 	pTree : A list of PNodes comprising a tree.
+	levels : A list of list of PNodes. Each sublist
+	contains the nodes at a particular level of the tree.
 	"""
 	if levels == 0:
 		p = corr_matrix.shape[0]
@@ -223,6 +225,7 @@ def corr_matrix_to_pval_tree(corr_matrix, levels, max_size):
 	roots = []
 	prev_level = []
 	current_level = []
+	all_levels = []
 	for level, cutoff in enumerate(cutoffs):
 		groups = hierarchy.fcluster(link, cutoff, criterion="distance")
 		groupings.append(groups)
@@ -255,11 +258,14 @@ def corr_matrix_to_pval_tree(corr_matrix, levels, max_size):
 			current_level.append(node)
 		
 		# Signal that we're moving down a level in the tree
+		all_levels.append(current_level)
 		prev_level = current_level
 		current_level = []
 
 	# pTree
 	pTree = PTree(nodes=pTree)
+	if return_levels:
+		return pTree, all_levels
 	return pTree
 
 #### Wrappers on top of the ptree

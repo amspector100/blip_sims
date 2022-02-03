@@ -88,8 +88,8 @@ class MultipleDCRT():
 		"""
 		Computes many (group) p-values.
 		"""
-		self.pTree = tree_methods.corr_matrix_to_pval_tree(
-			self.Sigma, levels=levels, max_size=max_size
+		self.pTree, self.levels = tree_methods.corr_matrix_to_pval_tree(
+			self.Sigma, levels=levels, max_size=max_size, return_levels=True
 		)
 		# Todo: could speed up computation using nested structure
 		for node in self.pTree.nodes:
