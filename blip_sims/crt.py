@@ -59,6 +59,7 @@ class MultipleDCRT():
 		self.mu = mu if mu is not None else X.mean(axis=0)
 		self.screen = screen
 		self.suppress_warnings = suppress_warnings
+		self.pTree = None
 
 		# Check if y is binary or Gaussian
 		unique_y = np.sort(np.unique(y))
@@ -84,13 +85,21 @@ class MultipleDCRT():
 
 		self.pTree = None
 
-	def multiple_pvals(self, levels=0, max_size=100, **kwargs):
+	def create_tree(self, levels=0, max_size=100):
 		"""
-		Computes many (group) p-values.
+		Creates a tree for p-values.
 		"""
 		self.pTree, self.levels = tree_methods.corr_matrix_to_pval_tree(
 			self.Sigma, levels=levels, max_size=max_size, return_levels=True
 		)
+
+	def multiple_pvals(self, levels=0, max_size=100, **kwargs):
+		"""
+		Computes many (group) p-values.
+		"""
+		if self.pTree is None:
+			self.create_tree(levels=levels, max_size=max_size)
+		
 		# Todo: could speed up computation using nested structure
 		for node in self.pTree.nodes:
 			node.p = self.p_value(
@@ -106,6 +115,7 @@ class MultipleDCRT():
 		inds,
 		cond_mean_transform=None,
 		cond_var=None,
+		model_type='lasso',
 		node=None,
 		**kwargs
 	):
@@ -172,7 +182,10 @@ class MultipleDCRT():
 				#y_distilled = np.dot(Z, lasso.coef_.T)
 				y_distilled = lasso.predict_proba(Z)[:, 1]
 			else:
-				lasso = sklearn.linear_model.LassoCV(**kwargs)
+				if model_type == 'elasticnet':
+					lasso = sklearn.linear_model.ElasticNetCV(**kwargs)
+				else:
+					lasso = sklearn.linear_model.LassoCV(**kwargs)
 				lasso.fit(Z, self.y)
 				y_distilled = lasso.predict(Z)
 

@@ -92,7 +92,33 @@ def single_seed_sim(
 	crt_model = blip_sims.crt.MultipleDCRT(
 		y=y, X=X, Sigma=V, screen=screen, suppress_warnings=args.get("suppress_warnings", [True])[0]
 	)
-	crt_model.multiple_pvals(levels=levels, max_size=max_size)
+	crt_model.create_tree(levels=levels, max_size=max_size)
+	crt_kwargs = dict(
+		max_iter=args.get('max_iter', [500])[0],
+		model_type=args.get('model_type', ['lasso'])[0],
+	)
+
+
+	# Cheating for fast testing by setting null pvals to be uniform
+	# (not for use in final simulations)
+	if args.get('cheat_null_pvals', [0])[0]:
+		for node in crt_model.pTree.nodes:
+			if np.all(beta[list(node.group)] == 0):
+				node.p = np.random.uniform()
+			else:
+				node.p = crt_model.p_value(
+					inds=list(node.group),
+					node=node,
+					**crt_kwargs
+				)
+	else:
+		crt_model.multiple_pvals(
+			max_size=max_size,
+			levels=levels,
+			**crt_kwargs
+		)
+
+
 	crt_mtime = time.time() - t0
 	_, rej_yek = crt_model.pTree.outer_nodes_yekutieli(q=q)
 	rej_fbh, _ = crt_model.pTree.tree_fbh(q=q)
