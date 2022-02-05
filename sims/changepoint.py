@@ -33,6 +33,7 @@ COLUMNS = [
 	'sparsity',
 	'coeff_size',
 	'spacing',
+	'reversion_prob',
 	'seed', 
 ]
 
@@ -42,12 +43,13 @@ def single_seed_sim(
 	sparsity,
 	coeff_size,
 	spacing,
+	reversion_prob,
 	args,
 ):
 	np.random.seed(seed)
 	output = []
 	dgp_args = [
-		p, sparsity, coeff_size, spacing, seed
+		p, sparsity, coeff_size, spacing, reversion_prob, seed
 	]
 
 	# Create data
@@ -57,7 +59,8 @@ def single_seed_sim(
 		spacing=spacing,
 		coeff_dist=args.get('coeff_dist', ['normal'])[0],
 		coeff_size=coeff_size,
-		min_coeff=args.get('min_coeff', [0.1 * coeff_size])[0]
+		min_coeff=args.get('min_coeff', [0.1 * coeff_size])[0],
+		reversion_prob=reversion_prob,
 	)
 	q = args.get('q', [0.1])[0]
 	max_pep = args.get('max_pep', [2*q])[0]
@@ -125,31 +128,32 @@ def single_seed_sim(
 			)
 
 			# Method Type 2: BCP + BLiP
-			t0 = time.time()
-			inclusions = blip_sims.bcp.run_bcp(
-				y=Y, nsample=nsample, chains=chains, 
-				p0=1-sparsity if well_specified else 0.1, 
-				w0=1/(coeff_size + 1) if well_specified else 0.2 
-			)
-			mtime = time.time() - t0
-			t0 = time.time()
-			cand_groups = pyblip.create_groups.all_cand_groups(
-				inclusions=inclusions, q=q, max_pep=max_pep, max_size=max_size, prenarrow=prenarrow
-			)
-			# Run BLiP
-			detections = pyblip.blip.BLiP(
-				cand_groups=cand_groups,
-				q=q,
-				error='fdr',
-				max_pep=max_pep,
-				perturb=True,
-				deterministic=True
-			)
-			blip_time = time.time() - t0
-			nfd, fdr, power = utilities.nodrej2power(detections, beta)
-			output.append(
-				['BCP + BLiP', mtime, blip_time, power, nfd, fdr, well_specified, nsample] + dgp_args
-			)
+			if args.get('run_bcp', [True])[0]:
+				t0 = time.time()
+				inclusions = blip_sims.bcp.run_bcp(
+					y=Y, nsample=nsample, chains=chains, 
+					p0=1-sparsity if well_specified else 0.1, 
+					w0=1/(coeff_size + 1) if well_specified else 0.2 
+				)
+				mtime = time.time() - t0
+				t0 = time.time()
+				cand_groups = pyblip.create_groups.all_cand_groups(
+					inclusions=inclusions, q=q, max_pep=max_pep, max_size=max_size, prenarrow=prenarrow
+				)
+				# Run BLiP
+				detections = pyblip.blip.BLiP(
+					cand_groups=cand_groups,
+					q=q,
+					error='fdr',
+					max_pep=max_pep,
+					perturb=True,
+					deterministic=True
+				)
+				blip_time = time.time() - t0
+				nfd, fdr, power = utilities.nodrej2power(detections, beta)
+				output.append(
+					['BCP + BLiP', mtime, blip_time, power, nfd, fdr, well_specified, nsample] + dgp_args
+				)
 
 
 	# Method Type 3: susie-based methods
@@ -232,34 +236,36 @@ def main(args):
 		for sparsity in args.get('sparsity', [0.05]):
 			for coeff_size in args.get('coeff_size', [1]):
 				for spacing in args.get('spacing', ['random']):
-					constant_inputs=dict(
-						p=p,
-						sparsity=sparsity,
-						coeff_size=coeff_size,
-						spacing=spacing,
-					)
-					msg = f"Finished with {constant_inputs}"
-					constant_inputs['args'] = args
-					outputs = utilities.apply_pool(
-						func=single_seed_sim,
-						seed=list(range(seed_start, reps+seed_start)), 
-						constant_inputs=constant_inputs,
-						num_processes=num_processes, 
-					)
-					msg += f" at {np.around(time.time() - time0, 2)}"
-					print(msg)
-					for out in outputs:
-						all_outputs.extend(out)
+					for reversion_prob in args.get('reversion_prob', [0]):
+						constant_inputs=dict(
+							p=p,
+							sparsity=sparsity,
+							coeff_size=coeff_size,
+							spacing=spacing,
+							reversion_prob=reversion_prob,
+						)
+						msg = f"Finished with {constant_inputs}"
+						constant_inputs['args'] = args
+						outputs = utilities.apply_pool(
+							func=single_seed_sim,
+							seed=list(range(seed_start, reps+seed_start)), 
+							constant_inputs=constant_inputs,
+							num_processes=num_processes, 
+						)
+						msg += f" at {np.around(time.time() - time0, 2)}"
+						print(msg)
+						for out in outputs:
+							all_outputs.extend(out)
 
-					# Save
-					out_df = pd.DataFrame(all_outputs, columns=COLUMNS)
-					out_df.to_csv(result_path, index=False)
-					groupers = [
-						'method', 'spacing', 'p', 'sparsity', 'coeff_size', 'well_specified', 'nsample'
-					]
-					meas = ['model_time', 'power', 'fdr', 'blip_time']
-					summary_df = out_df.groupby(groupers)[meas].mean()
-					print(summary_df.reset_index())
+						# Save
+						out_df = pd.DataFrame(all_outputs, columns=COLUMNS)
+						out_df.to_csv(result_path, index=False)
+						groupers = [
+							'method', 'spacing', 'reversion_prob', 'p', 'sparsity', 'coeff_size', 'well_specified', 'nsample'
+						]
+						meas = ['model_time', 'power', 'fdr', 'blip_time']
+						summary_df = out_df.groupby(groupers)[meas].mean()
+						print(summary_df.reset_index())
 
 
 

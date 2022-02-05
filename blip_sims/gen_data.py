@@ -168,6 +168,7 @@ def generate_regression_data(
 
 def gen_changepoint_data(
 	T=100,
+	reversion_prob=0,
 	coeff_size=1,
 	coeff_dist='normal',
 	min_coeff=0.1,
@@ -183,6 +184,15 @@ def gen_changepoint_data(
 		spacing=spacing,
 	)
 	beta[0] = 0
+
+	# Add some probability of reverting to original mean
+	for j in range(T):
+		if beta[j] != 0:
+			u = np.random.uniform()
+			prevsum = np.sum(beta[0:j-1])
+			if prevsum != 0 and u <= reversion_prob:
+				beta[j] = -1 * prevsum
+
 	Y = np.random.randn(T) + np.cumsum(beta)
 	# In case we want to use a dummy X variable for regression
 	X = np.ones((T, T))
