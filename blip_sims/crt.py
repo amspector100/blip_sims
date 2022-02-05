@@ -1,3 +1,5 @@
+from re import S
+import sys
 import numpy as np
 import scipy
 import scipy.linalg
@@ -6,6 +8,15 @@ import sklearn.linear_model
 import warnings
 
 from . import tree_methods
+try:
+	import pyblip
+except ModuleNotFoundError:
+	import os
+	import sys
+	main_dir = os.path.split(os.path.split(os.path.abspath(__file__))[0])[0]
+	main_dir = os.path.split(main_dir)[0]
+	sys.path.insert(0, os.path.abspath(main_dir + '/pyblip'))
+	import pyblip
 
 MIN_PVAL = 1e-16
 
@@ -110,6 +121,34 @@ class MultipleDCRT():
 
 		return self.pTree
 
+	def compute_X_given_Z(
+		self,
+		inds,
+		Z_inds,
+		Z,
+	):
+		# Block matrices
+		mu_Z = self.mu[Z_inds]
+		Sigma_XZ = self.Sigma[inds][:, Z_inds]
+		Sigma_Z = self.Sigma[Z_inds][:, Z_inds]
+		inv_Sigma_Z = np.linalg.inv(Sigma_Z) # Todo: could use rank-k updates to do this more efficiently
+		# Dimension: p - k x 1
+		cond_mean_transform = np.dot(Sigma_XZ, inv_Sigma_Z).T
+		cond_mean = np.dot(Z - mu_Z, cond_mean_transform) + self.mu[inds]
+		# Conditional variance
+		if len(inds) == 1:
+			ind = inds[0]
+			cond_var = 1 / self.invSigma[ind, ind]
+		else:
+			Sigma_X = self.Sigma[inds][:, inds]
+			cond_var = Sigma_X - np.dot(
+				Sigma_XZ, np.dot(inv_Sigma_Z, Sigma_XZ.T)
+			)
+		# Return
+		return cond_mean, cond_var
+
+		
+
 	def distill(
 		self, 
 		inds,
@@ -182,18 +221,31 @@ class MultipleDCRT():
 				#y_distilled = np.dot(Z, lasso.coef_.T)
 				y_distilled = lasso.predict_proba(Z)[:, 1]
 			else:
-				if model_type == 'elasticnet':
-					lasso = sklearn.linear_model.ElasticNetCV(**kwargs)
+				if model_type in ['elasticnet', 'lasso']:
+					if model_type == 'elasticnet':
+						lasso = sklearn.linear_model.ElasticNetCV(**kwargs)
+					elif model_type == 'lasso':
+						lasso = sklearn.linear_model.LassoCV(**kwargs)
+					lasso.fit(Z, self.y)
+					y_distilled = lasso.predict(Z)
+				elif model_type == 'bayes':
+					for key in ['max_iter', 'tol', 'selection', 'cv']:
+						kwargs.pop(key, '')
+					lm = pyblip.linear.LinearSpikeSlab(
+						X=np.ascontiguousarray(Z), y=self.y, **kwargs
+					)
+					lm.sample(N=5000, chains=1, bsize=3)
+					beta = lm.betas.mean(axis=0)
+					y_distilled = np.dot(Z, beta)
 				else:
-					lasso = sklearn.linear_model.LassoCV(**kwargs)
-				lasso.fit(Z, self.y)
-				y_distilled = lasso.predict(Z)
+					raise ValueError(f"Unrecognized model_type={model_type}")
+				
 
 		# 2. Distill information about X using Z
 		if cond_mean_transform is None or (cond_var is None and len(inds) != 1):
 			Sigma_XZ = self.Sigma[inds][:, Z_inds]
 			Sigma_Z = self.Sigma[Z_inds][:, Z_inds]
-			inv_Sigma_Z = np.linalg.inv(Sigma_Z)
+			inv_Sigma_Z = np.linalg.inv(Sigma_Z) # Todo: could use rank-k updates to do this more efficiently
 		if cond_mean_transform is None:
 			# Dimension: p - k x 1
 			cond_mean_transform = np.dot(Sigma_XZ, inv_Sigma_Z).T
@@ -201,7 +253,6 @@ class MultipleDCRT():
 			if len(inds) == 1:
 				ind = inds[0]
 				cond_var = 1 / self.invSigma[ind, ind]
-			### Todo: could use rank-k updates to do this more efficiently
 			else:
 				Sigma_X = self.Sigma[inds][:, inds]
 				cond_var = Sigma_X - np.dot(
@@ -213,7 +264,7 @@ class MultipleDCRT():
 			whitening_transform = scipy.linalg.sqrtm(np.linalg.inv(cond_var))
 
 		# Whitening transformation
-		cond_mean_X = np.dot(Z - mu_Z, cond_mean_transform)
+		cond_mean_X = np.dot(Z - mu_Z, cond_mean_transform) + mu_X
 		X_distilled = np.dot(
 			whitening_transform, X.T - cond_mean_X.T
 		).T # dimension: n x k
@@ -265,9 +316,6 @@ class MultipleDCRT():
 			inds = [inds]
 		if isinstance(inds, np.ndarray):
 			inds = inds.tolist()
-		#if len(inds) == self.p:
-			# In this case, we just run an F-test ()
-			# raise ValueError("Inds includes every feature")
 		if set(inds).intersection(self.active_set) == set():
 			return 1
 
@@ -308,3 +356,67 @@ class MultipleDCRT():
 			raise ValueError(
 				f"agg ({agg}) must be one of ['l2', 'max']"
 			)
+
+	def full_p_value(
+		self, 
+		inds,
+		test_stat='bayes',
+		M=200,
+		**test_stat_kwargs,
+	):
+		# Initialize
+		Z_inds = [j for j in np.arange(self.p) if j not in inds]
+		Z = self.X[:, Z_inds]
+		if test_stat == 'bayes':
+			test_stat = bayes_test_stat
+		
+		# Sample distribution for X | Z
+		cond_mean, cond_var = self.compute_X_given_Z(
+			inds=inds, Z_inds=Z_inds, Z=Z
+		)
+		# Sample X | Z
+		noise = np.random.randn(M, self.n, len(inds))
+		# Univariate case
+		if len(cond_var.shape) < 2:
+			X_sample = np.sqrt(cond_var) * noise
+		else:
+			var_transform = np.linalg.cholesky(cond_var).T
+			X_sample = np.dot(noise, var_transform)
+		X_sample += cond_mean.reshape(-1, self.n, len(inds))
+
+		# Loop through and compute test statistics
+		true_test_stat = test_stat(
+			Xstar=self.X[:, inds], 
+			Z=Z,
+			y=self.y, 
+			**test_stat_kwargs
+		)
+		rand_test_stats = np.zeros(M)
+		for j in range(M):
+			rand_test_stats[j] = test_stat(
+				Xstar=X_sample[j, :, :],
+				Z=Z,
+				y=self.y,
+				**test_stat_kwargs
+			)
+		# Return p-value
+		pval = (np.sum(true_test_stat <= rand_test_stats) + 1) / (M+1)
+		return pval
+
+def bayes_test_stat(
+	Xstar, Z, y, params=None, sample_kwargs=None,
+):
+	if params is None:
+		params = dict()
+	if sample_kwargs is None:
+		sample_kwargs = dict()
+
+	# Concatenate
+	k = Xstar.shape[1]
+	X = np.ascontiguousarray(np.concatenate([Xstar, Z], axis=1)) 
+	# Run MCMC
+	lm = pyblip.linear.LinearSpikeSlab(X=X, y=y, **params)
+	lm.sample(**sample_kwargs)
+	# Test stat
+	pip = np.any(lm.betas[:, 0:k] != 0, axis=1).mean()
+	return pip

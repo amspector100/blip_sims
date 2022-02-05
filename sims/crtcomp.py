@@ -52,7 +52,6 @@ def single_seed_sim(
 	k,
 	coeff_size,
 	args,
-	dap_prefix,
 	tol=1e-3
 ):
 	np.random.seed(seed)
@@ -93,10 +92,23 @@ def single_seed_sim(
 		y=y, X=X, Sigma=V, screen=screen, suppress_warnings=args.get("suppress_warnings", [True])[0]
 	)
 	crt_model.create_tree(levels=levels, max_size=max_size)
-	crt_kwargs = dict(
-		max_iter=args.get('max_iter', [500])[0],
-		model_type=args.get('model_type', ['lasso'])[0],
-	)
+	model_type = args.get('model_type', ['lasso'])[0]
+	if model_type != 'bayes':
+		crt_kwargs = dict(
+			max_iter=args.get('max_iter', [500])[0],
+			model_type=model_type,
+			tol=args.get('tol', [5e-3])[0],
+		)
+	else:
+		crt_kwargs = dict(
+			model_type=model_type,
+			p0=1-sparsity,
+			update_p0=False,
+			tau2=coeff_size,
+			update_tau2=False,
+			sigma2=1,
+			update_sigma2=False,
+		)
 
 
 	# Cheating for fast testing by setting null pvals to be uniform
@@ -287,13 +299,7 @@ def main(args):
 									coeff_size=coeff_size,
 								)
 								msg = f"Finished with {constant_inputs}"
-								dap_prefix = blip_sims.utilities.create_dap_prefix(
-									today=today,
-									hour=hour,
-									**constant_inputs,
-								)
 								constant_inputs['args'] = args
-								constant_inputs['dap_prefix'] = dap_prefix
 								outputs = utilities.apply_pool(
 									func=single_seed_sim,
 									seed=list(range(seed_start, reps+seed_start)), 
@@ -302,7 +308,6 @@ def main(args):
 								)
 								msg += f" at {np.around(time.time() - time0, 2)}"
 								print(msg)
-								os.rmdir(os.path.dirname(dap_prefix))
 								for out in outputs:
 									all_outputs.extend(out)
 
@@ -310,7 +315,7 @@ def main(args):
 								out_df = pd.DataFrame(all_outputs, columns=COLUMNS)
 								out_df.to_csv(result_path, index=False)
 								groupers = [
-									'method', 'cgroups', 'y_dist', 'covmethod', 'kappa', 
+									'cgroups', 'method', 'y_dist', 'covmethod', 'kappa', 
 									'p', 'sparsity', 'k', 'well_specified', 'nsample'
 								]
 								meas = ['model_time', 'blip_time', 'num_cands', 'power', 'ntd', 'fdr']
