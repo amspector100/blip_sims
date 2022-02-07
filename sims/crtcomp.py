@@ -76,6 +76,14 @@ def single_seed_sim(
 		return_cov=True
 	)
 	X, y, beta, V = generate_regression_data(**sample_kwargs)
+
+	# Kwargs for LSS sampling
+	bsize = args.get('bsize', [1])[0]
+	chains = args.get('chains', [10])[0]
+	nsample = args.get('nsample', [1000])[0]
+	skwargs = dict(N=nsample, chains=chains)
+	if y_dist == 'gaussian':
+		skwargs['bsize'] = bsize
 	
 	# Parse args for cand groups
 	q = args.get('q', [0.1])[0]
@@ -125,7 +133,7 @@ def single_seed_sim(
 						inds=list(node.group),
 						M=M,
 						params=crt_kwargs,
-						sample_kwargs=dict(N=1000, chains=5, bsize=1),
+						sample_kwargs=skwargs,
 					)
 				else:
 					node.p = crt_model.p_value(
@@ -213,67 +221,61 @@ def single_seed_sim(
 			))
 			method_names.append('PSS + BLiP')
 
-		bsize = args.get('bsize', [1])[0]
-		chains = args.get('chains', [10])[0]
-		for nsample in args.get("nsample", [1000]):
-			for model, mname in zip(models, method_names):
+		for model, mname in zip(models, method_names):
+			t0 = time.time()
+			model.sample(**skwargs)
+			inclusions = model.betas != 0
+			mtime = time.time() - t0
+			# Calculate PIPs and cand groups
+			for cgroup in args.get('cgroups', ['all', 'fbh'] + list(range(levels+1))):
 				t0 = time.time()
-				skwargs = dict(N=nsample, chains=chains)
-				if y_dist == 'gaussian':
-					skwargs['bsize'] = bsize
-				model.sample(**skwargs)
-				inclusions = model.betas != 0
-				mtime = time.time() - t0
-				# Calculate PIPs and cand groups
-				for cgroup in args.get('cgroups', ['all', 'fbh'] + list(range(levels+1))):
-					t0 = time.time()
-					if cgroup == 'all':
-						cand_groups = pyblip.create_groups.all_cand_groups(
-							inclusions=inclusions,
-							q=q,
-							max_pep=max_pep,
-							max_size=max_size,
-							prenarrow=prenarrow
-						)
-					elif cgroup == 'seq':
-						cand_groups = pyblip.create_groups.sequential_groups(
-							inclusions,
-							q=q,
-							max_pep=max_pep,
-							max_size=max_size,
-							prenarrow=prenarrow,
-						)
-					elif cgroup == 'fbh' or isinstance(cgroup, int):
-						if cgroup == 'fbh':
-							groups = [x.group for x in crt_model.pTree.nodes]
-						else:
-							groups = [x.group for x in crt_model.levels[cgroup]]
-						peps = [
-							1 - np.any(inclusions[:, list(g)], axis=1).mean() for g in groups
-						]
-						cand_groups = [
-							pyblip.create_groups.CandidateGroup(
-								pep=pep, group=g
-							) for pep, g in zip(peps, groups)
-						]
-					else:
-						raise ValueError(f"Unrecognized cgroup={cgroup}")
-
-					# Run BLiP
-					detections = pyblip.blip.BLiP(
-						cand_groups=cand_groups,
+				if cgroup == 'all':
+					cand_groups = pyblip.create_groups.all_cand_groups(
+						inclusions=inclusions,
 						q=q,
-						error='fdr',
 						max_pep=max_pep,
-						perturb=True,
-						deterministic=True
+						max_size=max_size,
+						prenarrow=prenarrow
 					)
-					blip_time = time.time() - t0
-					nfd, fdr, power = utilities.nodrej2power(detections, beta)
-					ntd = len(detections) - nfd
-					output.append(
-						[mname, cgroup, len(cand_groups), mtime, blip_time, power, ntd, nfd, fdr, well_specified, nsample] + dgp_args
+				elif cgroup == 'seq':
+					cand_groups = pyblip.create_groups.sequential_groups(
+						inclusions,
+						q=q,
+						max_pep=max_pep,
+						max_size=max_size,
+						prenarrow=prenarrow,
 					)
+				elif cgroup == 'fbh' or isinstance(cgroup, int):
+					if cgroup == 'fbh':
+						groups = [x.group for x in crt_model.pTree.nodes]
+					else:
+						groups = [x.group for x in crt_model.levels[cgroup]]
+					peps = [
+						1 - np.any(inclusions[:, list(g)], axis=1).mean() for g in groups
+					]
+					cand_groups = [
+						pyblip.create_groups.CandidateGroup(
+							pep=pep, group=g
+						) for pep, g in zip(peps, groups)
+					]
+				else:
+					raise ValueError(f"Unrecognized cgroup={cgroup}")
+
+				# Run BLiP
+				detections = pyblip.blip.BLiP(
+					cand_groups=cand_groups,
+					q=q,
+					error='fdr',
+					max_pep=max_pep,
+					perturb=True,
+					deterministic=True
+				)
+				blip_time = time.time() - t0
+				nfd, fdr, power = utilities.nodrej2power(detections, beta)
+				ntd = len(detections) - nfd
+				output.append(
+					[mname, cgroup, len(cand_groups), mtime, blip_time, power, ntd, nfd, fdr, well_specified, nsample] + dgp_args
+				)
 		
 	return output
 

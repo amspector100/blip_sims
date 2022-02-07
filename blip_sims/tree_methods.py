@@ -185,7 +185,9 @@ def corr_matrix_to_pval_tree(corr_matrix, levels, max_size, return_levels):
 		roots = [
 			PNode(group=set([j])) for j in range(p)
 		]
-		pTree = PTree(roots=roots, nodes=roots)
+		pTree = PTree(nodes=roots)
+		if return_levels:
+			return pTree, [pTree.nodes]
 		return pTree
 
 	# Perform hierarchical clustering
