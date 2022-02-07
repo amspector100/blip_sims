@@ -65,7 +65,7 @@ def single_seed_sim(
 		coeff_size=coeff_size,
 		min_coeff=args.get('min_coeff', [0.1 * coeff_size])[0],
 		dgp_seed=args.get("dgp_seed", [seed])[0],
-		max_corr=args.get("max_corr", [0.9999])[0],
+		max_corr=args.get("max_corr", [0.99])[0],
 		return_cov=True
 	)
 	X, y, beta, V = generate_regression_data(**sample_kwargs)
@@ -167,6 +167,7 @@ def single_seed_sim(
 	)
 
 	print(f"Finished with seed={seed}.")
+	sys.stdout.flush()
 	return output
 
 def main(args):

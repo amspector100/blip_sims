@@ -93,72 +93,85 @@ def single_seed_sim(
 	)
 	crt_model.create_tree(levels=levels, max_size=max_size)
 	model_type = args.get('model_type', ['lasso'])[0]
-	if model_type != 'bayes':
-		crt_kwargs = dict(
-			max_iter=args.get('max_iter', [500])[0],
-			model_type=model_type,
-			tol=args.get('tol', [5e-3])[0],
-		)
-	else:
-		crt_kwargs = dict(
-			model_type=model_type,
-			p0=1-sparsity,
-			update_p0=False,
-			tau2=coeff_size,
-			update_tau2=False,
-			sigma2=1,
-			update_sigma2=False,
-		)
+	#full_pval = args.get('full_pval', [False])[0]
+	M = args.get("m", [200])[0]
+	for full_pval in args.get('full_pval', [False]):
+		if model_type != 'bayes' and not full_pval:
+			crt_kwargs = dict(
+				max_iter=args.get('max_iter', [500])[0],
+				model_type=model_type,
+				tol=args.get('tol', [5e-3])[0],
+			)
+		else:
+			crt_kwargs = dict(
+				p0=1-sparsity,
+				update_p0=False,
+				tau2=coeff_size,
+				update_tau2=False,
+				sigma2=1,
+				update_sigma2=False,
+			)
+			if not full_pval:
+				crt_kwargs['model_type'] = model_type
+
+		# Cheating for fast testing by setting null pvals to be uniform
+		# (not for use in final simulations)
+		if args.get('cheat_null_pvals', [1])[0]:
+			for node in crt_model.pTree.nodes:
+				if np.all(beta[list(node.group)] == 0):
+					node.p = np.random.uniform()
+				elif full_pval:
+					node.p = crt_model.full_p_value(
+						inds=list(node.group),
+						M=M,
+						params=crt_kwargs,
+						sample_kwargs=dict(N=1000, chains=5, bsize=1),
+					)
+				else:
+					node.p = crt_model.p_value(
+						inds=list(node.group),
+						node=node,
+						**crt_kwargs
+					)
+		else:
+			crt_model.multiple_pvals(
+				max_size=max_size,
+				levels=levels,
+				**crt_kwargs
+			)
 
 
-	# Cheating for fast testing by setting null pvals to be uniform
-	# (not for use in final simulations)
-	if args.get('cheat_null_pvals', [0])[0]:
-		for node in crt_model.pTree.nodes:
-			if np.all(beta[list(node.group)] == 0):
-				node.p = np.random.uniform()
-			else:
-				node.p = crt_model.p_value(
-					inds=list(node.group),
-					node=node,
-					**crt_kwargs
-				)
-	else:
-		crt_model.multiple_pvals(
-			max_size=max_size,
-			levels=levels,
-			**crt_kwargs
-		)
+		crt_mtime = time.time() - t0
+		_, rej_yek = crt_model.pTree.outer_nodes_yekutieli(q=q)
+		rej_fbh, _ = crt_model.pTree.tree_fbh(q=q)
+		nnodes = len(crt_model.pTree.nodes)
+		for mname, rej in zip(['CRT + FBH', 'CRT + Yekutieli'], [rej_fbh, rej_yek]):
+			nfd, fdr, power = utilities.nodrej2power(rej, beta)
+			ntd = len(rej) - nfd
+			if not full_pval:
+				mname = 'd' + mname # dCRT
+			output.append(
+				[mname, "fbh", nnodes, crt_mtime, 0, power, ntd, nfd, fdr, True, 0] + dgp_args
+			)
 
-
-	crt_mtime = time.time() - t0
-	_, rej_yek = crt_model.pTree.outer_nodes_yekutieli(q=q)
-	rej_fbh, _ = crt_model.pTree.tree_fbh(q=q)
-	nnodes = len(crt_model.pTree.nodes)
-	for mname, rej in zip(['CRT + FBH', 'CRT + Yekutieli'], [rej_fbh, rej_yek]):
-		nfd, fdr, power = utilities.nodrej2power(rej, beta)
-		ntd = len(rej) - nfd
-		output.append(
-			[mname, "fbh", nnodes, crt_mtime, 0, power, ntd, nfd, fdr, True, 0] + dgp_args
-		)
-
-	# CRT and BLiP at various fixed levels
-	for level in range(levels+1):
-		level_nodes = crt_model.levels[level]
-		level_rej = multipletests(
-			[n.p for n in level_nodes], alpha=q, method='fdr_bh',
-		)[0]
-		level_rej = [n for (n,flag) in zip(level_nodes, level_rej) if flag == True]
-		l_nfd, l_fdr, l_power = utilities.nodrej2power(
-			level_rej, beta
-		)
-		l_ntd = len(level_rej) - l_nfd
-		output.append(
-			[
-				'CRT', level, len(level_nodes), crt_mtime, 0, l_power, 
-				l_ntd, l_nfd, l_fdr, True, level
-			] + dgp_args
-		)
+		# CRT and BLiP at various fixed levels
+		mname = 'CRT' if full_pval else 'dCRT'
+		for level in range(levels+1):
+			level_nodes = crt_model.levels[level]
+			level_rej = multipletests(
+				[n.p for n in level_nodes], alpha=q, method='fdr_bh',
+			)[0]
+			level_rej = [n for (n,flag) in zip(level_nodes, level_rej) if flag == True]
+			l_nfd, l_fdr, l_power = utilities.nodrej2power(
+				level_rej, beta
+			)
+			l_ntd = len(level_rej) - l_nfd
+			output.append(
+				[
+					mname, level, len(level_nodes), crt_mtime, 0, l_power, 
+					l_ntd, l_nfd, l_fdr, True, 0
+				] + dgp_args
+			)
 
 	# Gibbs + BLiP
 	for well_specified in args.get('well_specified', [False, True]):
