@@ -69,7 +69,7 @@ def single_seed_sim(
 	chains = args.get('chains', [10])[0]
 	bsize = args.get('bsize', [5])[0]
 
-	# Method type 1: BLiP + SpikeSlab
+	# Sampling methods
 	for well_specified in args.get('well_specified', [False, True]):
 		if well_specified:
 			p0 = 1 - sparsity
@@ -95,37 +95,39 @@ def single_seed_sim(
 			update_sigma2=update,
 		)
 		for nsample in args.get("nsample", [5000]):
-			t0 = time.time()
-			model.sample(N=nsample, chains=chains, bsize=bsize)
-			# Add inclusions
-			mtime = time.time() - t0
+			# Method type 1: BLiP + SpikeSlab
+			if args.get('run_lss', [True])[0]:
+				t0 = time.time()
+				model.sample(N=nsample, chains=chains, bsize=bsize)
+				# Add inclusions
+				mtime = time.time() - t0
 
-			# Calculate PIPs
-			t0 = time.time()
-			inclusions = model.betas != 0
-			inclusions[:, 0] = 0
-			cand_groups = pyblip.create_groups.all_cand_groups(
-				inclusions=inclusions,
-				X=X,
-				q=q,
-				max_pep=max_pep,
-				max_size=max_size,
-				prenarrow=prenarrow,
-			)
-			# Run BLiP
-			detections = pyblip.blip.BLiP(
-				cand_groups=cand_groups,
-				q=q,
-				error='fdr',
-				max_pep=max_pep,
-				perturb=True,
-				deterministic=True
-			)
-			blip_time = time.time() - t0
-			nfd, fdr, power = utilities.nodrej2power(detections, beta)
-			output.append(
-				['LSS + BLiP', mtime, blip_time, power, nfd, fdr, well_specified, nsample] + dgp_args
-			)
+				# Calculate PIPs
+				t0 = time.time()
+				inclusions = model.betas != 0
+				inclusions[:, 0] = 0
+				cand_groups = pyblip.create_groups.all_cand_groups(
+					inclusions=inclusions,
+					X=X,
+					q=q,
+					max_pep=max_pep,
+					max_size=max_size,
+					prenarrow=prenarrow,
+				)
+				# Run BLiP
+				detections = pyblip.blip.BLiP(
+					cand_groups=cand_groups,
+					q=q,
+					error='fdr',
+					max_pep=max_pep,
+					perturb=True,
+					deterministic=True
+				)
+				blip_time = time.time() - t0
+				nfd, fdr, power = utilities.nodrej2power(detections, beta)
+				output.append(
+					['LSS + BLiP', mtime, blip_time, power, nfd, fdr, well_specified, nsample] + dgp_args
+				)
 
 			# Method Type 2: BCP + BLiP
 			if args.get('run_bcp', [True])[0]:
