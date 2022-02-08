@@ -61,6 +61,7 @@ def generate_regression_data(
 	rank=10, # for factor model
 	min_coeff=0.1,
 	max_corr=0.99,
+	delta=1,
 	permute_X=False,
 	return_cov=False, # for CRT return cov matrix
 	dgp_seed=None,
@@ -109,6 +110,14 @@ def generate_regression_data(
 		Z = np.dot(W, etas.T)
 		V = np.dot(etas, etas.T)
 
+		# Scale down V (only for specific CRT experiments)
+		if delta != 1:
+			for i in range(p):
+				for j in range(i):
+					V[i, j] = delta * V[i,j]
+					V[j, i] = delta * V[j,i]
+			Z = np.dot(W, np.linalg.cholesky(V).T)
+		
 		if covmethod == 'ark':
 			X = Z
 		else:

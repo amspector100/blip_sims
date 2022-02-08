@@ -39,6 +39,7 @@ COLUMNS = [
 	'sparsity',
 	'k',
 	'coeff_size',
+	'delta',
 	'seed', 
 ]
 
@@ -51,13 +52,14 @@ def single_seed_sim(
 	sparsity,
 	k,
 	coeff_size,
+	delta,
 	args,
 	tol=1e-3
 ):
 	np.random.seed(seed)
 	output = []
 	dgp_args = [
-		y_dist, covmethod, kappa, p, sparsity, k, coeff_size, seed
+		y_dist, covmethod, kappa, p, sparsity, k, coeff_size, delta, seed
 	]
 
 	# Create data
@@ -73,6 +75,7 @@ def single_seed_sim(
 		coeff_size=coeff_size,
 		min_coeff=args.get('min_coeff', [0.1 * coeff_size])[0],
 		dgp_seed=args.get("dgp_seed", [seed])[0],
+		delta=delta,
 		return_cov=True
 	)
 	X, y, beta, V = generate_regression_data(**sample_kwargs)
@@ -304,38 +307,40 @@ def main(args):
 					for k in args.get('k', [1]):
 						for y_dist in args.get('y_dist', ['gaussian']):
 							for coeff_size in args.get('coeff_size', [1]):
-								constant_inputs=dict(
-									y_dist=y_dist,
-									covmethod=covmethod,
-									kappa=kappa,
-									p=p,
-									sparsity=sparsity,
-									k=k,
-									coeff_size=coeff_size,
-								)
-								msg = f"Finished with {constant_inputs}"
-								constant_inputs['args'] = args
-								outputs = utilities.apply_pool(
-									func=single_seed_sim,
-									seed=list(range(seed_start, reps+seed_start)), 
-									constant_inputs=constant_inputs,
-									num_processes=num_processes, 
-								)
-								msg += f" at {np.around(time.time() - time0, 2)}"
-								print(msg)
-								for out in outputs:
-									all_outputs.extend(out)
+								for delta in args.get('delta', [1]):
+									constant_inputs=dict(
+										y_dist=y_dist,
+										covmethod=covmethod,
+										kappa=kappa,
+										p=p,
+										sparsity=sparsity,
+										k=k,
+										coeff_size=coeff_size,
+										delta=delta,
+									)
+									msg = f"Finished with {constant_inputs}"
+									constant_inputs['args'] = args
+									outputs = utilities.apply_pool(
+										func=single_seed_sim,
+										seed=list(range(seed_start, reps+seed_start)), 
+										constant_inputs=constant_inputs,
+										num_processes=num_processes, 
+									)
+									msg += f" at {np.around(time.time() - time0, 2)}"
+									print(msg)
+									for out in outputs:
+										all_outputs.extend(out)
 
-								# Save
-								out_df = pd.DataFrame(all_outputs, columns=COLUMNS)
-								out_df.to_csv(result_path, index=False)
-								groupers = [
-									'cgroups', 'method', 'y_dist', 'covmethod', 'kappa', 
-									'p', 'sparsity', 'k', 'well_specified', 'nsample'
-								]
-								meas = ['model_time', 'blip_time', 'num_cands', 'power', 'ntd', 'fdr']
-								summary_df = out_df.groupby(groupers)[meas].mean()
-								print(summary_df.reset_index())
+									# Save
+									out_df = pd.DataFrame(all_outputs, columns=COLUMNS)
+									out_df.to_csv(result_path, index=False)
+									groupers = [
+										'cgroups', 'delta', 'method', 'y_dist', 'covmethod', 'kappa', 
+										'p', 'sparsity', 'k', 'well_specified', 'nsample'
+									]
+									meas = ['model_time', 'blip_time', 'num_cands', 'power', 'ntd', 'fdr']
+									summary_df = out_df.groupby(groupers)[meas].mean()
+									print(summary_df.reset_index())
 
 
 
