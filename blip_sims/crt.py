@@ -212,7 +212,6 @@ class MultipleDCRT():
 			kwargs['cv'] = kwargs.get('cv', 5)
 			kwargs['max_iter'] = kwargs.get('max_iter', 500)
 			kwargs['tol'] = kwargs.get('tol', 5e-3)
-			kwargs['selection'] = 'random'
 			if self.logistic:
 				kwargs['penalty'] = kwargs.get('penalty', 'l1')
 				kwargs['solver'] = kwargs.get('solver', 'liblinear')
@@ -221,6 +220,7 @@ class MultipleDCRT():
 				#y_distilled = np.dot(Z, lasso.coef_.T)
 				y_distilled = lasso.predict_proba(Z)[:, 1]
 			else:
+				kwargs['selection'] = 'random'
 				if model_type in ['elasticnet', 'lasso']:
 					if model_type == 'elasticnet':
 						lasso = sklearn.linear_model.ElasticNetCV(**kwargs)

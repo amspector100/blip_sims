@@ -121,7 +121,7 @@ def single_seed_sim(
 	# CRT + FBH/Yekutieli
 	if args.get('run_crt', [True])[0]:
 		t0 = time.time()
-		screen = args.get('screen', [False])[0]
+		screen = args.get('screen', [True])[0]
 		# Run CRT
 		crt_model = blip_sims.crt.MultipleDCRT(y=y, X=X, Sigma=V, screen=screen)
 		crt_model.multiple_pvals(levels=levels, max_size=max_size)
