@@ -112,14 +112,14 @@ def create_output_directory(args, dir_type='misc', return_date=False):
 def check_pep_calibration(beta, group_dict, peps):
 	rows = []
 	for j in group_dict.keys():
-	    feature = group_dict[j]
-	    if np.all(beta[feature] == 0):
-	        null = True
-	    else:
-	        null = False
-	    rows.extend(
-	        [(p, null) for p in peps[j]]
-	    )
+		feature = group_dict[j]
+		if np.all(beta[feature] == 0):
+			null = True
+		else:
+			null = False
+		rows.extend(
+			[(p, null) for p in peps[j]]
+		)
 	pep_df = pd.DataFrame(rows, columns=['pep', 'null'])
 	pep_df['bin'] = pd.cut(pep_df['pep'], bins=np.arange(21) / 20)
 	calib = pep_df.groupby('bin')['null'].agg(['count', 'sum', 'mean', 'std'])
@@ -180,7 +180,9 @@ def count_randomized_pairs(nodes, tol=1e-5):
 	nonint_groups = []
 	# First count number of zeros and ones
 	for node in nodes:
-		if node.data['sprob'] > 1 - tol:
+		if 'sprob' not in node.data:
+			num_zeros += 1
+		elif node.data['sprob'] > 1 - tol:
 			num_ones += 1
 		elif node.data['sprob'] < tol:
 			num_zeros += 1

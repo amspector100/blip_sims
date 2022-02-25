@@ -4,15 +4,15 @@ Template for running simulations.
 
 import os
 import sys
-import parser
 import time
 import copy
 
 import numpy as np
 import pandas as pd
-import utilities
-from gen_data import generate_regression_data
-from context import pyblip
+from context import pyblip, blip_sims
+from blip_sims.gen_data import generate_regression_data
+import blip_sims.utilities as utilities
+import blip_sims.parser as parser
 
 # Specifies the type of simulation
 DIR_TYPE = os.path.split(os.path.abspath(__file__))[1].split(".py")[0]
@@ -20,7 +20,8 @@ DIR_TYPE = os.path.split(os.path.abspath(__file__))[1].split(".py")[0]
 # columns of dataframe
 COLUMNS = [
 	'seed', 'blip_time', 'num_cand_groups', 'num_zeros', 'num_ones', 'n_singleton', 'n_rand_pairs', 
-	'epower_lp', 'epower_ilp', 'epower_sample', 'nfd', 'fdp', 'power', 'kappa', 'p', 'sparsity', 'covmethod'
+	'epower_lp', 'epower_ilp', 'epower_sample', 'nfd', 'fdp', 'power', 'btrack_iter',
+	'kappa', 'p', 'sparsity', 'covmethod', 'error'
 ]
 
 def single_seed_sim(
@@ -37,6 +38,7 @@ def single_seed_sim(
 	so that R can run the same simulation, etc.
 	"""
 	np.random.seed(seed)
+	output = []
 
 	# Create data
 	n = int(kappa * p)
@@ -57,7 +59,10 @@ def single_seed_sim(
 		tau2_a0=20,
 		tau2_b0=10,
 	)
-	model.sample(N=1000, chains=10)
+	nsample = args.get('nsample', [1000])[0]
+	chains = args.get('chains', [10])[0]
+	bsize = args.get('bsize', [1])[0]
+	model.sample(N=nsample, chains=chains, bsize=bsize)
 	inclusions = model.betas != 0
 
 	# Calculate PIPs
@@ -65,67 +70,75 @@ def single_seed_sim(
 	q = args.get('q', [0.1])[0]
 	max_pep = args.get('max_pep', [2*q])[0]
 	max_size = args.get('max_size', [25])[0]
-	cand_groups = pyblip.create_groups.sequential_groups(
+	cand_groups = pyblip.create_groups.all_cand_groups(
 		inclusions,
+		X=X,
 		q=q,
 		max_pep=max_pep,
 		max_size=max_size,
 		prenarrow=args.get('prenarrow', [1])[0],
 	)
-	dist_matrix = np.abs(1 - np.dot(X.T, X))
-	cand_groups.extend(pyblip.create_groups.hierarchical_groups(	
-			inclusions,
-			dist_matrix=dist_matrix,
-			max_pep=max_pep,
-			max_size=max_size,
-			filter_sequential=True,
-	))
+	# dist_matrix = np.abs(1 - np.dot(X.T, X))
+	# cand_groups.extend(pyblip.create_groups.hierarchical_groups(	
+	# 		inclusions,
+	# 		dist_matrix=dist_matrix,
+	# 		max_pep=max_pep,
+	# 		max_size=max_size,
+	# 		filter_sequential=True,
+	# ))
 
 	# Run BLiP
-	detections = pyblip.blip.BLiP(
-		cand_groups=cand_groups,
-		q=q,
-		error='fdr',
-		max_pep=max_pep,
-		perturb=True,
-		deterministic=True
-	)
-	nfd, fdr, power = utilities.nodrej2power(detections, beta)
-	v_opt = np.sum([x.pep * x.data['sprob'] for x in cand_groups])
-	# Quickly calculate randomized solution
-	detections_sample = pyblip.blip.binarize_selections(
-		cand_groups=[copy.deepcopy(x) for x in cand_groups],
-		q=q,
-		error='fdr',
-		deterministic=False
-	)
+	for error in args.get('error', ['fdr', 'fwer', 'local_fdr', 'pfer']):
+		cgs = [copy.deepcopy(cg) for cg in cand_groups]
+		detections, status = pyblip.blip.BLiP(
+			cand_groups=cgs,
+			q=q,
+			error=error,
+			max_pep=max_pep,
+			perturb=True,
+			deterministic=True,
+			return_problem_status=True
+		)
+		nfd, fdr, power = utilities.nodrej2power(detections, beta)
+		# Count number of non-integer cand_groups
+		num_zeros, num_ones, n_single, n_pairs = utilities.count_randomized_pairs(cgs)
+		# Quickly calculate randomized solution, which is not recommended
+		detections_sample = pyblip.blip.BLiP(
+			cand_groups=[copy.deepcopy(cg) for cg in cand_groups],
+			q=q,
+			error=error,
+			max_pep=max_pep,
+			perturb=True,
+			deterministic=False,
+			return_problem_status=False,
+		)
+		# Final expected power bound calculations
+		epower_lp = status['lp_bound']
+		epower_ilp = sum([cg.data['weight'] * (1-cg.pep) for cg in detections])
+		epower_sample = sum([cg.data['weight'] * (1-cg.pep) for cg in detections_sample])
 
-	epower_lp = sum([cg.data['weight'] * cg.data['sprob'] for cg in cand_groups])
-	epower_ilp = sum([cg.data['weight'] for cg in detections])
-	epower_sample = sum([cg.data['weight'] for cg in detections_sample])
-
-	# Count number of non-integer cand_groups
-	num_zeros, num_ones, n_single, n_pairs = utilities.count_randomized_pairs(cand_groups)
-
-	return [
-		seed, 
-		np.around(time.time() - t0, 2),
-		len(cand_groups),
-		num_zeros,
-		num_ones,
-		n_single,
-		n_pairs,
-		epower_lp,
-		epower_ilp,
-		epower_sample,
-		nfd,
-		fdr,
-		power,
-		kappa,
-		p,
-		sparsity,
-		covmethod
-	]
+		output.append([
+			seed, 
+			np.around(time.time() - t0, 2),
+			len(cand_groups),
+			num_zeros,
+			num_ones,
+			n_single,
+			n_pairs,
+			epower_lp,
+			epower_ilp,
+			epower_sample,
+			nfd,
+			fdr,
+			power,
+			status['backtracking_iter'],
+			kappa,
+			p,
+			sparsity,
+			covmethod,
+			error
+		])
+	return output
 
 def main(args):
 	# Parse arguments
@@ -155,15 +168,16 @@ def main(args):
 						),
 						num_processes=num_processes, 
 					)
-					all_outputs.extend(outputs)
+					for out in outputs:
+						all_outputs.extend(out)
 
 					# Save
 					out_df = pd.DataFrame(all_outputs, columns=COLUMNS)
 					out_df.to_csv(result_path, index=False)
 					summary_df = out_df.groupby(
-						['covmethod', 'kappa', 'p', 'sparsity']
+						['covmethod', 'kappa', 'p', 'sparsity', 'error']
 					)[[
-						'power', 'nfd', 'n_singleton', 'n_rand_pairs',
+						'power', 'nfd', 'btrack_iter', 'n_singleton', 'n_rand_pairs',
 						'epower_lp', 'epower_ilp', 'epower_sample', 'blip_time']].mean()
 					print(summary_df.reset_index())
 

@@ -152,7 +152,7 @@ def single_seed_sim(
 
 		# Method type 1: BLiP + SpikeSlab
 		# Run Gaussian sampler if (1) not well-specified or (2) gaussian response
-		if y_dist == 'gaussian' or not well_specified:
+		if (y_dist == 'gaussian' or not well_specified) and args.get('run_lss', [True])[0]:
 			lss_model = pyblip.linear.LinearSpikeSlab(
 				X=X,
 				y=y.astype(np.float64),
@@ -169,7 +169,7 @@ def single_seed_sim(
 		else:
 			models = []
 			method_names = []
-		if y_dist != 'gaussian':
+		if y_dist != 'gaussian' and args.get('run_pss', [True])[0]:
 			models.append(pyblip.probit.ProbitSpikeSlab(
 				X=X, y=y.astype(int), p0=p0, update_p0=update, #min_p0=min_p0 TODO
 			))
