@@ -139,9 +139,7 @@ def single_seed_sim(
 			for model, mname in zip(models, method_names):
 				t0 = time.time()
 				# Assemble arguments for sampling
-				skwargs = {'N':nsample, 'chains':chains, 'burn':int(0.1*nsample)}
-				if y_dist == 'gaussian':
-					skwargs['bsize']= bsize
+				skwargs = {'N':nsample, 'chains':chains, 'burn':int(0.1*nsample), 'bsize':bsize}
 				# Sample
 				model.sample(**skwargs)
 				inclusions = model.betas != 0

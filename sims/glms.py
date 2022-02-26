@@ -171,7 +171,15 @@ def single_seed_sim(
 			method_names = []
 		if y_dist != 'gaussian' and args.get('run_pss', [True])[0]:
 			models.append(pyblip.probit.ProbitSpikeSlab(
-				X=X, y=y.astype(int), p0=p0, update_p0=update, #min_p0=min_p0 TODO
+				X=X,
+				y=y,
+				p0=p0,
+				min_p0=min_p0,
+				update_p0=update,
+				tau2=tau2,
+				update_tau2=update,
+				sigma2=sigma2,
+				update_sigma2=update,
 			))
 			method_names.append('PSS + BLiP')
 
@@ -180,9 +188,7 @@ def single_seed_sim(
 		for nsample in args.get("nsample", [1000]):
 			for model, mname in zip(models, method_names):
 				t0 = time.time()
-				skwargs = dict(N=nsample, chains=chains)
-				if y_dist == 'gaussian':
-					skwargs['bsize'] = bsize
+				skwargs = dict(N=nsample, chains=chains, bsize=bsize, burn=int(0.1*nsample))
 				model.sample(**skwargs)
 				inclusions = model.betas != 0
 				mtime = time.time() - t0
