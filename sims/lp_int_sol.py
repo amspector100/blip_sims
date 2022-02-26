@@ -47,7 +47,10 @@ def single_seed_sim(
 		n=n,
 		p=p,
 		sparsity=sparsity,
-		coeff_dist=args.get('coeff_dist', ['uniform'])[0]
+		coeff_size=args.get('coeff_size', [2])[0],
+		coeff_dist=args.get('coeff_dist', ['uniform'])[0],
+		max_corr=args.get('max_corr', [0.99])[0],
+		k=args.get('k', [1])[0],
 	)
 
 	# Run linear spike slab
