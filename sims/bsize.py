@@ -132,21 +132,19 @@ def single_seed_sim(
 		for nsample in args.get("nsample", [1000]):
 			for model, mname in zip(models, method_names):
 				for bsize in args.get("bsize", [1, 3, 5]):
-					for chains in args.get("chains", [10]):
+					chains_vals = args.get("chains", [10])
+					max_chains = max(chains_vals)
+					t0 = time.time()
+					model.sample(
+						N=nsample, 
+						chains=max_chains,
+						burn=int(0.1*nsample),
+						bsize=bsize
+					)
+					mtime = time.time() - t0
+					for chains in chains_vals:
 						t0 = time.time()
-						model.sample(
-							N=nsample, 
-							chains=chains,
-							burn=int(0.1*nsample),
-							bsize=bsize
-						)
-						inclusions = model.betas != 0
-						mtime = time.time() - t0
-						#print(f"min_p0={min_p0}")
-						#print(model.p0s.mean())
-						#print(model.p0s)
-						# Calculate PIPs
-						t0 = time.time()
+						inclusions = model.betas[0:int(chains*nsample)] != 0
 						max_pep = args.get('max_pep', [2*q])[0]
 						max_size = args.get('max_size', [25])[0]
 						prenarrow = args.get('prenarrow', [0])[0]
@@ -169,7 +167,7 @@ def single_seed_sim(
 						blip_time = time.time() - t0
 						nfd, fdr, power = utilities.nodrej2power(detections, beta)
 						output.append(
-							[mname, bsize, mtime, blip_time, power, nfd, fdr, well_specified, nsample, chains] + dgp_args
+							[mname, bsize, chains * mtime / max_chains, blip_time, power, nfd, fdr, well_specified, nsample, chains] + dgp_args
 						)
 
 	# Method Type 2: susie-based methods
