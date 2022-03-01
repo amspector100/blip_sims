@@ -35,6 +35,7 @@ COLUMNS = [
 	'fdr',
 	'well_specified',
 	'nsample',
+	'chains',
 	'y_dist',
 	'covmethod',
 	'kappa',
@@ -131,44 +132,45 @@ def single_seed_sim(
 		for nsample in args.get("nsample", [1000]):
 			for model, mname in zip(models, method_names):
 				for bsize in args.get("bsize", [1, 3, 5]):
-					t0 = time.time()
-					model.sample(
-						N=nsample, 
-						chains=args.get("chains", [10])[0],
-						burn=int(0.1*nsample),
-						bsize=bsize
-					)
-					inclusions = model.betas != 0
-					mtime = time.time() - t0
-					#print(f"min_p0={min_p0}")
-					#print(model.p0s.mean())
-					#print(model.p0s)
-					# Calculate PIPs
-					t0 = time.time()
-					max_pep = args.get('max_pep', [2*q])[0]
-					max_size = args.get('max_size', [25])[0]
-					prenarrow = args.get('prenarrow', [0])[0]
-					cand_groups = pyblip.create_groups.all_cand_groups(	
-							inclusions=inclusions,
-							X=X,
-							max_pep=max_pep,
-							max_size=max_size,
-					)
+					for chains in args.get("chains", [10]):
+						t0 = time.time()
+						model.sample(
+							N=nsample, 
+							chains=chains,
+							burn=int(0.1*nsample),
+							bsize=bsize
+						)
+						inclusions = model.betas != 0
+						mtime = time.time() - t0
+						#print(f"min_p0={min_p0}")
+						#print(model.p0s.mean())
+						#print(model.p0s)
+						# Calculate PIPs
+						t0 = time.time()
+						max_pep = args.get('max_pep', [2*q])[0]
+						max_size = args.get('max_size', [25])[0]
+						prenarrow = args.get('prenarrow', [0])[0]
+						cand_groups = pyblip.create_groups.all_cand_groups(	
+								inclusions=inclusions,
+								X=X,
+								max_pep=max_pep,
+								max_size=max_size,
+						)
 
-					# Run BLiP
-					detections = pyblip.blip.BLiP(
-						cand_groups=cand_groups,
-						q=q,
-						error='fdr',
-						max_pep=max_pep,
-						perturb=True,
-						deterministic=True
-					)
-					blip_time = time.time() - t0
-					nfd, fdr, power = utilities.nodrej2power(detections, beta)
-					output.append(
-						[mname, bsize, mtime, blip_time, power, nfd, fdr, well_specified, nsample] + dgp_args
-					)
+						# Run BLiP
+						detections = pyblip.blip.BLiP(
+							cand_groups=cand_groups,
+							q=q,
+							error='fdr',
+							max_pep=max_pep,
+							perturb=True,
+							deterministic=True
+						)
+						blip_time = time.time() - t0
+						nfd, fdr, power = utilities.nodrej2power(detections, beta)
+						output.append(
+							[mname, bsize, mtime, blip_time, power, nfd, fdr, well_specified, nsample, chains] + dgp_args
+						)
 
 	# Method Type 2: susie-based methods
 	if args.get('run_susie', [False])[0]:
@@ -203,7 +205,7 @@ def single_seed_sim(
 		blip_time = time.time() - t0
 		nfd, fdr, power = utilities.nodrej2power(detections, beta)
 		output.append(
-			['susie + BLiP', 'all', susie_time, blip_time, power, nfd, fdr, True, 0] + dgp_args
+			['susie + BLiP', 'all', susie_time, blip_time, power, nfd, fdr, True, 0, 0] + dgp_args
 		)
 
 	# # Frequentist methods
@@ -280,8 +282,8 @@ def main(args):
 									out_df = pd.DataFrame(all_outputs, columns=COLUMNS)
 									out_df.to_csv(result_path, index=False)
 									groupers = [
-										'method', 'bsize', 'y_dist', 'covmethod', 'kappa', 'rank',
-										'p', 'sparsity', 'k', 'well_specified', 'nsample'
+										'method', 'bsize', 'chains', 'y_dist', 'covmethod', 'kappa', 'rank',
+										'p', 'sparsity', 'k', 'well_specified', 'nsample',
 									]
 									meas = ['model_time', 'power', 'fdr', 'blip_time']
 									summary_df = out_df.groupby(groupers)[meas].mean()
