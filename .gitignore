@@ -13,6 +13,7 @@ profile
 sims/hparam_search.py
 sims/fdr_comp.py
 sims/cgroups.py
+#sims/crtcompv2.py
 #sims/bsize.py
 
 # _____ R Defaults _______

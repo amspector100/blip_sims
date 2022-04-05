@@ -197,7 +197,7 @@ def single_seed_sim(
 					t0 = time.time()
 					if cgroup == 'all':
 						cand_groups = pyblip.create_groups.all_cand_groups(
-							inclusions=inclusions,
+							samples=inclusions,
 							q=q,
 							max_pep=max_pep,
 							max_size=max_size,

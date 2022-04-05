@@ -149,7 +149,7 @@ def single_seed_sim(
 						max_size = args.get('max_size', [25])[0]
 						prenarrow = args.get('prenarrow', [0])[0]
 						cand_groups = pyblip.create_groups.all_cand_groups(	
-								inclusions=inclusions,
+								samples=inclusions,
 								X=X,
 								max_pep=max_pep,
 								max_size=max_size,

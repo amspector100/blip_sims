@@ -247,7 +247,7 @@ class MultipleDCRT():
 			Sigma_Z = self.Sigma[Z_inds][:, Z_inds]
 			inv_Sigma_Z = np.linalg.inv(Sigma_Z) # Todo: could use rank-k updates to do this more efficiently
 		if cond_mean_transform is None:
-			# Dimension: p - k x 1
+			# Dimension: p - k x 10
 			cond_mean_transform = np.dot(Sigma_XZ, inv_Sigma_Z).T
 		if cond_var is None:
 			if len(inds) == 1:
@@ -264,7 +264,7 @@ class MultipleDCRT():
 			whitening_transform = scipy.linalg.sqrtm(np.linalg.inv(cond_var))
 
 		# Whitening transformation
-		cond_mean_X = np.dot(Z - mu_Z, cond_mean_transform) + mu_X
+		cond_mean_X = np.dot(Z - mu_Z, cond_mean_transform) #+ mu_X
 		X_distilled = np.dot(
 			whitening_transform, X.T - cond_mean_X.T
 		).T # dimension: n x k
@@ -360,15 +360,13 @@ class MultipleDCRT():
 	def full_p_value(
 		self, 
 		inds,
-		test_stat='bayes',
+		test_stat,
 		M=200,
 		**test_stat_kwargs,
 	):
 		# Initialize
 		Z_inds = [j for j in np.arange(self.p) if j not in inds]
 		Z = self.X[:, Z_inds]
-		if test_stat == 'bayes':
-			test_stat = bayes_test_stat
 		
 		# Sample distribution for X | Z
 		cond_mean, cond_var = self.compute_X_given_Z(
@@ -402,21 +400,3 @@ class MultipleDCRT():
 		# Return p-value
 		pval = (np.sum(true_test_stat <= rand_test_stats) + 1) / (M+1)
 		return pval
-
-def bayes_test_stat(
-	Xstar, Z, y, params=None, sample_kwargs=None,
-):
-	if params is None:
-		params = dict()
-	if sample_kwargs is None:
-		sample_kwargs = dict()
-
-	# Concatenate
-	k = Xstar.shape[1]
-	X = np.ascontiguousarray(np.concatenate([Xstar, Z], axis=1)) 
-	# Run MCMC
-	lm = pyblip.linear.LinearSpikeSlab(X=X, y=y, **params)
-	lm.sample(**sample_kwargs)
-	# Test stat
-	pip = np.any(lm.betas[:, 0:k] != 0, axis=1).mean()
-	return pip

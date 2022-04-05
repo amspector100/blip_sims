@@ -94,7 +94,7 @@ def single_seed_sim(
 	for error in args.get('error', ['fdr', 'fwer', 'local_fdr', 'pfer']):
 		cgs = [copy.deepcopy(cg) for cg in cand_groups]
 		detections, status = pyblip.blip.BLiP(
-			inclusions=inclusions, # for fwer search
+			samples=inclusions, # for fwer search
 			cand_groups=cgs,
 			q=q,
 			error=error,
@@ -109,7 +109,7 @@ def single_seed_sim(
 		num_zeros, num_ones, n_single, n_pairs = utilities.count_randomized_pairs(cgs)
 		# Quickly calculate randomized solution, which is not recommended
 		detections_sample = pyblip.blip.BLiP(
-			inclusions=inclusions,
+			samples=inclusions,
 			cand_groups=[copy.deepcopy(cg) for cg in cand_groups],
 			q=q,
 			error=error,

@@ -22,9 +22,11 @@ DIR_TYPE = os.path.split(os.path.abspath(__file__))[1].split(".py")[0]
 # columns of dataframe
 COLUMNS = [
 	'method',
+	'error',
 	'model_time',
 	'blip_time',
-	'power', 
+	'power',
+	'ndisc', 
 	'nfd',
 	'fdr',
 	'well_specified',
@@ -62,6 +64,7 @@ def single_seed_sim(
 		min_coeff=args.get('min_coeff', [0.1 * coeff_size])[0],
 		reversion_prob=reversion_prob,
 	)
+	error = args.get("error", ['fdr'])[0]
 	q = args.get('q', [0.1])[0]
 	max_pep = args.get('max_pep', [2*q])[0]
 	max_size = args.get('max_size', [25])[0]
@@ -107,7 +110,7 @@ def single_seed_sim(
 				inclusions = model.betas != 0
 				inclusions[:, 0] = 0
 				cand_groups = pyblip.create_groups.all_cand_groups(
-					inclusions=inclusions,
+					samples=inclusions,
 					X=X,
 					q=q,
 					max_pep=max_pep,
@@ -118,7 +121,7 @@ def single_seed_sim(
 				detections = pyblip.blip.BLiP(
 					cand_groups=cand_groups,
 					q=q,
-					error='fdr',
+					error=error,
 					max_pep=max_pep,
 					perturb=True,
 					deterministic=True
@@ -140,28 +143,46 @@ def single_seed_sim(
 				mtime = time.time() - t0
 				t0 = time.time()
 				cand_groups = pyblip.create_groups.all_cand_groups(
-					inclusions=inclusions, q=q, max_pep=max_pep, max_size=max_size, prenarrow=prenarrow
+					samples=inclusions, q=q, max_pep=max_pep, max_size=max_size, prenarrow=prenarrow
 				)
 				# Run BLiP
 				detections = pyblip.blip.BLiP(
 					cand_groups=cand_groups,
 					q=q,
-					error='fdr',
+					error=error,
 					max_pep=max_pep,
 					perturb=True,
 					deterministic=True
 				)
 				blip_time = time.time() - t0
 				nfd, fdr, power = utilities.nodrej2power(detections, beta)
+				ndisc = len(detections)
 				output.append(
-					['BCP + BLiP', mtime, blip_time, power, nfd, fdr, well_specified, nsample] + dgp_args
+					['BCP + BLiP', mtime, blip_time, power, ndisc, nfd, fdr, well_specified, nsample] + dgp_args
 				)
 
+	# Method 3: NSP
+	if error == 'fwer' and args.get("run_nsp", [True])[0]:
+		t0 = time.time()
+		nsp_sets = blip_sims.nsp.run_nsp(y=y, q=q, sigma2=1)
+		nsp_time = time.time() - t0
+		nfd, fdr, power = blip_sims.utilities.rejset_power(
+				nsp_sets, beta
+		)
+		ndisc = len(nsp_sets)
+		output.append(
+			['nsp', nsp_time, 0, power, ndisc, nfd, fdr, True, 0] + dgp_args
+		)
 
-	# Method Type 3: susie-based methods
+	# Method Type 4: susie-based methods
 	t0 = time.time()
+	L = np.ceil(p*sparsity)
+	if error == 'fdr' or error == 'local_fdr':
+		susie_q = q
+	else:
+		susie_q = 1 - (1 - q)**(1/L)
 	susie_alphas, susie_sets = blip_sims.susie.run_susie_trendfilter(
-		Y, 0, L=np.ceil(p*sparsity), q=q
+		Y, 0, L=L, q=susie_q
 	)
 	susie_time = time.time() - t0
 	susie_sets = [x for x in susie_sets if len(x) < max_size]
@@ -172,14 +193,12 @@ def single_seed_sim(
 	]
 	for j in range(len(susie_sets)):
 		susie_sets[j] = susie_sets[j][susie_sets[j] != p]
-	
-	
-
 	nfd, fdr, power = blip_sims.utilities.rejset_power(
 		susie_sets, beta
 	)
+	ndisc = len(susie_sets)
 	output.append(
-		['susie', susie_time, 0, power, nfd, fdr, True, 0] + dgp_args
+		['susie', susie_time, 0, power, ndisc, nfd, fdr, True, 0] + dgp_args
 	)
 	# Now apply BLiP on top of susie
 	t0 = time.time()
@@ -196,7 +215,7 @@ def single_seed_sim(
 		detections = pyblip.blip.BLiP(
 			cand_groups=cand_groups,
 			q=q,
-			error='fdr',
+			error=error,
 			max_pep=max_pep,
 			perturb=True,
 			deterministic=True
@@ -207,12 +226,13 @@ def single_seed_sim(
 
 		blip_time = time.time() - t0
 		nfd, fdr, power = utilities.nodrej2power(detections, beta)
+		ndisc = len(detections)
 		output.append(
-			['susie + BLiP', susie_time, blip_time, power, nfd, fdr, True, 0] + dgp_args
+			['susie + BLiP', susie_time, blip_time, power, ndisc, nfd, fdr, True, 0] + dgp_args
 		)
 	else:
 		output.append(
-			['susie + BLiP', susie_time, 0, 0, 0, 0, True, 0] + dgp_args
+			['susie + BLiP', susie_time, 0, 0, 0, 0, 0, True, 0] + dgp_args
 		)
 
 	return output
