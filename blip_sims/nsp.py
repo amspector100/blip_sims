@@ -29,6 +29,6 @@ def run_nsp(
 	for j in range(interval_df.shape[0]):
 		start = interval_df.iloc[j]['starts']
 		end = interval_df.iloc[j]['ends']
-		detections.append(np.arange(start, end+1, 1))
+		detections.append(np.arange(start, end+1, 1).astype(int))
 
 	return detections

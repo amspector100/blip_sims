@@ -128,8 +128,9 @@ def single_seed_sim(
 				)
 				blip_time = time.time() - t0
 				nfd, fdr, power = utilities.nodrej2power(detections, beta)
+				ndisc = len(detections)
 				output.append(
-					['LSS + BLiP', mtime, blip_time, power, nfd, fdr, well_specified, nsample] + dgp_args
+					['LSS + BLiP', error, mtime, blip_time, power, ndisc, nfd, fdr, well_specified, nsample] + dgp_args
 				)
 
 			# Method Type 2: BCP + BLiP
@@ -158,20 +159,20 @@ def single_seed_sim(
 				nfd, fdr, power = utilities.nodrej2power(detections, beta)
 				ndisc = len(detections)
 				output.append(
-					['BCP + BLiP', mtime, blip_time, power, ndisc, nfd, fdr, well_specified, nsample] + dgp_args
+					['BCP + BLiP', error, mtime, blip_time, power, ndisc, nfd, fdr, well_specified, nsample] + dgp_args
 				)
 
 	# Method 3: NSP
 	if error == 'fwer' and args.get("run_nsp", [True])[0]:
 		t0 = time.time()
-		nsp_sets = blip_sims.nsp.run_nsp(y=y, q=q, sigma2=1)
+		nsp_sets = blip_sims.nsp.run_nsp(y=Y, q=q, sigma2=1)
 		nsp_time = time.time() - t0
 		nfd, fdr, power = blip_sims.utilities.rejset_power(
 				nsp_sets, beta
 		)
 		ndisc = len(nsp_sets)
 		output.append(
-			['nsp', nsp_time, 0, power, ndisc, nfd, fdr, True, 0] + dgp_args
+			['nsp', error, nsp_time, 0, power, ndisc, nfd, fdr, True, 0] + dgp_args
 		)
 
 	# Method Type 4: susie-based methods
@@ -198,7 +199,7 @@ def single_seed_sim(
 	)
 	ndisc = len(susie_sets)
 	output.append(
-		['susie', susie_time, 0, power, ndisc, nfd, fdr, True, 0] + dgp_args
+		['susie', error, susie_time, 0, power, ndisc, nfd, fdr, True, 0] + dgp_args
 	)
 	# Now apply BLiP on top of susie
 	t0 = time.time()
@@ -228,11 +229,11 @@ def single_seed_sim(
 		nfd, fdr, power = utilities.nodrej2power(detections, beta)
 		ndisc = len(detections)
 		output.append(
-			['susie + BLiP', susie_time, blip_time, power, ndisc, nfd, fdr, True, 0] + dgp_args
+			['susie + BLiP', error, susie_time, blip_time, power, ndisc, nfd, fdr, True, 0] + dgp_args
 		)
 	else:
 		output.append(
-			['susie + BLiP', susie_time, 0, 0, 0, 0, 0, True, 0] + dgp_args
+			['susie + BLiP', error, susie_time, 0, 0, 0, 0, 0, True, 0] + dgp_args
 		)
 
 	return output
