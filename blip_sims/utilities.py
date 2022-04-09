@@ -114,9 +114,10 @@ def calc_pep_df(beta, cand_groups, alphas):
 	for cg in cand_groups:
 		g = list(cg.group)
 		susie_pep = 1 - np.max(np.sum(alphas[:, g], axis=1))
+		susie_pep = max(susie_pep, 0)
 		rows.append([susie_pep, cg.pep, np.all(beta[g] == 0), len(g)])
 	pep_df = pd.DataFrame(
-		rows, columns=['pep', 'susie_pep', 'null', 'size']
+		rows, columns=['susie_pep', 'pep', 'null', 'size']
 	)
 	#pep_df['bin'] = pd.cut(pep_df['pep'], bins=np.arange(21) / 20)
 	#calib = pep_df.groupby('bin')['null'].agg(['count', 'sum', 'mean', 'std'])
