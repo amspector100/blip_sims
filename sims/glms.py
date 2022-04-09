@@ -264,7 +264,8 @@ def single_seed_sim(
 			X=X, 
 			q=q,
 			prenarrow=prenarrow,
-			max_size=max_size
+			max_size=max_size,
+			max_pep=max_pep
 		)
 		detections = pyblip.blip.BLiP(
 			cand_groups=cand_groups,

@@ -109,22 +109,19 @@ def create_output_directory(args, dir_type='misc', return_date=False):
 		return output_dir, today, hour
 	return output_dir
 
-def check_pep_calibration(beta, group_dict, peps):
+def calc_pep_df(beta, cand_groups, alphas):
 	rows = []
-	for j in group_dict.keys():
-		feature = group_dict[j]
-		if np.all(beta[feature] == 0):
-			null = True
-		else:
-			null = False
-		rows.extend(
-			[(p, null) for p in peps[j]]
-		)
-	pep_df = pd.DataFrame(rows, columns=['pep', 'null'])
-	pep_df['bin'] = pd.cut(pep_df['pep'], bins=np.arange(21) / 20)
-	calib = pep_df.groupby('bin')['null'].agg(['count', 'sum', 'mean', 'std'])
-	calib['se'] = calib['std'] / np.sqrt(calib['sum'])
-	return calib
+	for cg in cand_groups:
+		g = list(cg.group)
+		susie_pep = 1 - np.max(np.sum(alphas[:, g], axis=1))
+		rows.append([susie_pep, cg.pep, np.all(beta[g] == 0), len(g)])
+	pep_df = pd.DataFrame(
+		rows, columns=['pep', 'susie_pep', 'null', 'size']
+	)
+	#pep_df['bin'] = pd.cut(pep_df['pep'], bins=np.arange(21) / 20)
+	#calib = pep_df.groupby('bin')['null'].agg(['count', 'sum', 'mean', 'std'])
+	#calib['se'] = calib['std'] / np.sqrt(calib['sum'])
+	return pep_df
 
 def create_dap_prefix(today, hour, **kwargs):
 	# Output directory

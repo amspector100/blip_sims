@@ -21,6 +21,8 @@ def create_sparse_coefficients(
 	elif coeff_dist == 'uniform':
 		nonnull_coefs = coeff_size * np.random.uniform(1/2, 1, size=kp)
 		nonnull_coefs *= (1 - 2*np.random.binomial(1, 0.5, size=kp))
+	elif coeff_dist == 'none':
+		nonnull_coeffs = coeff_size * (1 - 2*np.random.binomial(1, 0.5, size=kp))
 	else:
 		raise ValueError(f"Unrecognized coeff_dist={coeff_dist}")
 	# Decide location of non-nulls
@@ -65,6 +67,7 @@ def generate_regression_data(
 	permute_X=False,
 	return_cov=False, # for CRT return cov matrix
 	dgp_seed=None,
+	spacing='random',
 ):
 	# if dgp_seed is not None, ensure data-generating 
 	# process (dgp) is constant
@@ -73,8 +76,12 @@ def generate_regression_data(
 
 	# Beta
 	beta = create_sparse_coefficients(
-		p=p, sparsity=sparsity, coeff_dist=coeff_dist, 
-		coeff_size=coeff_size, min_coeff=min_coeff
+		p=p, 
+		sparsity=sparsity, 
+		coeff_dist=coeff_dist, 
+		coeff_size=coeff_size, 
+		min_coeff=min_coeff,
+		spacing=spacing
 	)
 
 	# Generate X-data
