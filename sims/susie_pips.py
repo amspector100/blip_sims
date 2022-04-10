@@ -72,7 +72,7 @@ def single_seed_sim(
 
 	# Parse args for cand groups
 	q = args.get("q", [0.1])[0]
-	max_pep = args.get('max_pep', [2*q])[0]
+	max_pep = args.get('max_pep', [0.5])[0]
 	max_size = args.get('max_size', [25])[0]
 	prenarrow = args.get('prenarrow', [False])[0]
 
@@ -102,7 +102,7 @@ def single_seed_sim(
 	detections = pyblip.blip.BLiP(
 		cand_groups=cand_groups,
 		q=q,
-		error='fdr',
+		error=args.get('error', ['fdr'])[0],
 		max_pep=max_pep,
 		perturb=True,
 		deterministic=True
@@ -114,9 +114,13 @@ def single_seed_sim(
 	)
 
 	# PEP-based outputs
+	for cg in detections:
+		cg.data['detected'] = True
 	pep_df = utilities.calc_pep_df(
 		beta=beta, cand_groups=cand_groups, alphas=susie_alphas
 	)
+	pep_df['seed'] = seed
+	print(f"Done with seed={seed}.")
 	return output, pep_df
 
 def main(args):
