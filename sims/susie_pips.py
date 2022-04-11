@@ -75,6 +75,7 @@ def single_seed_sim(
 	max_pep = args.get('max_pep', [0.5])[0]
 	max_size = args.get('max_size', [25])[0]
 	prenarrow = args.get('prenarrow', [False])[0]
+	purity_threshold = args.get('purity_threshold', [0.0])[0]
 
 	# Fit SuSiE
 	t0 = time.time()
@@ -97,7 +98,8 @@ def single_seed_sim(
 		q=q,
 		prenarrow=prenarrow,
 		max_size=max_size,
-		max_pep=max_pep
+		max_pep=max_pep,
+		purity_threshold=purity_threshold,
 	)
 	detections = pyblip.blip.BLiP(
 		cand_groups=cand_groups,

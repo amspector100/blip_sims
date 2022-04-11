@@ -98,6 +98,7 @@ def create_output_directory(args, dir_type='misc', return_date=False):
 	parent_dir = os.path.split(file_dir)[0]
 	output_dir = f'{parent_dir}/data/{dir_type}/{today}/{hour}/'
 	# Ensure directory exists
+	print(f"Output directory is {output_dir}")
 	if not os.path.exists(output_dir):
 		os.makedirs(output_dir)
 	# Save description
