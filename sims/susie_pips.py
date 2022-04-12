@@ -33,6 +33,8 @@ COLUMNS = [
 	'p',
 	'k',
 	'coeff_size',
+	'purity_threshold',
+	'k_threshold',
 	'seed', 
 ]
 
@@ -45,13 +47,15 @@ def single_seed_sim(
 	p,
 	k,
 	coeff_size,
+	purity_threshold,
+	k_threshold,
 	args,
 	tol=1e-3
 ):
 	np.random.seed(seed)
 	output = []
 	common_args = [
-		L, sparsity, covmethod, kappa, p, k, coeff_size, seed
+		L, sparsity, covmethod, kappa, p, k, coeff_size, purity_threshold, k_threshold, seed
 	]
 
 	# Create data
@@ -75,7 +79,6 @@ def single_seed_sim(
 	max_pep = args.get('max_pep', [0.5])[0]
 	max_size = args.get('max_size', [25])[0]
 	prenarrow = args.get('prenarrow', [False])[0]
-	purity_threshold = args.get('purity_threshold', [0.0])[0]
 
 	# Fit SuSiE
 	t0 = time.time()
@@ -100,6 +103,7 @@ def single_seed_sim(
 		max_size=max_size,
 		max_pep=max_pep,
 		purity_threshold=purity_threshold,
+		k_threshold=k_threshold,
 	)
 	detections = pyblip.blip.BLiP(
 		cand_groups=cand_groups,
@@ -118,8 +122,11 @@ def single_seed_sim(
 	# PEP-based outputs
 	for cg in detections:
 		cg.data['detected'] = True
+	save_all_cgs = args.get("save_all_cgs", [False])[0]
 	pep_df = utilities.calc_pep_df(
-		beta=beta, cand_groups=cand_groups, alphas=susie_alphas
+		beta=beta, 
+		cand_groups=cand_groups if save_all_cgs else detections, 
+		alphas=susie_alphas
 	)
 	pep_df['seed'] = seed
 	print(f"Done with seed={seed}.")
@@ -152,47 +159,51 @@ def main(args):
 					for k in args.get('k', [1]):
 						for L in args.get('l', [np.ceil(p*sparsity)]):
 							for coeff_size in args.get('coeff_size', [1]):
-								constant_inputs=dict(
-									L=L,
-									covmethod=covmethod,
-									kappa=kappa,
-									p=p,
-									sparsity=sparsity,
-									k=k,
-									coeff_size=coeff_size,
-								)
-								msg = f"Finished with {constant_inputs}"
-								constant_inputs['args'] = args
-								outputs = utilities.apply_pool(
-									func=single_seed_sim,
-									seed=list(range(seed_start, reps+seed_start)), 
-									constant_inputs=constant_inputs,
-									num_processes=num_processes, 
-								)
-								msg += f" at {np.around(time.time() - time0, 2)}"
-								print(msg)
-								for out in outputs:
-									all_outputs.extend(out[0])
-									pep_df = out[1]
-									for key in constant_inputs:
-										if key != 'args':
-											pep_df[key] = constant_inputs[key]
-									all_pep_dfs.append(pep_df)
+								for purity_threshold in args.get('purity_threshold', [0.0]):
+									for k_threshold in args.get('k_threshold', [None]):
+										constant_inputs=dict(
+											L=L,
+											covmethod=covmethod,
+											kappa=kappa,
+											p=p,
+											sparsity=sparsity,
+											k=k,
+											coeff_size=coeff_size,
+											purity_threshold=purity_threshold,
+											k_threshold=k_threshold,
+										)
+										msg = f"Finished with {constant_inputs}"
+										constant_inputs['args'] = args
+										outputs = utilities.apply_pool(
+											func=single_seed_sim,
+											seed=list(range(seed_start, reps+seed_start)), 
+											constant_inputs=constant_inputs,
+											num_processes=num_processes, 
+										)
+										msg += f" at {np.around(time.time() - time0, 2)}"
+										print(msg)
+										for out in outputs:
+											all_outputs.extend(out[0])
+											pep_df = out[1]
+											for key in constant_inputs:
+												if key != 'args':
+													pep_df[key] = constant_inputs[key]
+											all_pep_dfs.append(pep_df)
 
-								# Save power df
-								out_df = pd.DataFrame(all_outputs, columns=COLUMNS)
-								out_df.to_csv(result_path, index=False)
-								groupers = [
-									'method', 'L', 'covmethod', 'kappa', 
-									'p', 'sparsity', 'k'
-								]
-								meas = ['model_time', 'blip_time', 'power', 'fdr']
-								summary_df = out_df.groupby(groupers)[meas].mean()
-								print(summary_df.reset_index())
+										# Save power df
+										out_df = pd.DataFrame(all_outputs, columns=COLUMNS)
+										out_df.to_csv(result_path, index=False)
+										groupers = [
+											'method', 'L', 'covmethod', 'kappa', 
+											'p', 'sparsity', 'k'
+										]
+										meas = ['model_time', 'blip_time', 'power', 'fdr']
+										summary_df = out_df.groupby(groupers)[meas].mean()
+										print(summary_df.reset_index())
 
-								# save pep df
-								final_pep_df = pd.concat(all_pep_dfs, axis='index')
-								final_pep_df.to_csv(pep_path, index=False)
+										# save pep df
+										final_pep_df = pd.concat(all_pep_dfs, axis='index')
+										final_pep_df.to_csv(pep_path, index=False)
 
 
 
