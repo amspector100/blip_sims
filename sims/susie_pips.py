@@ -12,6 +12,7 @@ import pandas as pd
 from context import pyblip, blip_sims
 from blip_sims import parser
 from blip_sims import utilities
+from blip_sims.utilities import elapsed
 from blip_sims.gen_data import generate_regression_data
 
 from sklearn import linear_model
@@ -40,6 +41,7 @@ COLUMNS = [
 
 def single_seed_sim(
 	seed,
+	time0,
 	L,
 	sparsity,
 	covmethod,
@@ -67,6 +69,7 @@ def single_seed_sim(
 		sparsity=sparsity,
 		k=k,
 		coeff_dist=args.get('coeff_dist', ['normal'])[0],
+		spacing=args.get('spacing', ['random'])[0],
 		coeff_size=coeff_size,
 		min_coeff=args.get('min_coeff', [0.1 * coeff_size])[0],
 		dgp_seed=seed,
@@ -129,11 +132,12 @@ def single_seed_sim(
 		alphas=susie_alphas
 	)
 	pep_df['seed'] = seed
-	print(f"Done with seed={seed}.")
+	print(f"Done with seed={seed} at time {elapsed(time0)}.")
 	return output, pep_df
 
 def main(args):
 	# Parse arguments
+	time0 = time.time()
 	args = parser.parse_args(args)
 	print(args['description'])
 	sys.stdout.flush()
@@ -163,6 +167,7 @@ def main(args):
 									for k_threshold in args.get('k_threshold', [None]):
 										constant_inputs=dict(
 											L=L,
+											time0=time0,
 											covmethod=covmethod,
 											kappa=kappa,
 											p=p,
@@ -186,7 +191,7 @@ def main(args):
 											all_outputs.extend(out[0])
 											pep_df = out[1]
 											for key in constant_inputs:
-												if key != 'args':
+												if key != 'args' and key != 'time0':
 													pep_df[key] = constant_inputs[key]
 											all_pep_dfs.append(pep_df)
 
