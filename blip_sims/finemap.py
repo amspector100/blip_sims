@@ -9,7 +9,7 @@ from functools import reduce
 import time
 from pyblip import create_groups
 
-def create_finemap_data(X, y, pi1, max_nsignal, file_prefix):
+def create_finemap_data(X, y, pi1, max_nsignal, file_prefix, maf=0.5):
 	n, p = X.shape
 	ld = np.corrcoef(X.T)
 	# Note E[X] = 0 
@@ -26,7 +26,7 @@ def create_finemap_data(X, y, pi1, max_nsignal, file_prefix):
 	zdata['position'] = list(range(1, p+1))
 	zdata['allele1'] = 'A'
 	zdata['allele2'] = 'G'
-	zdata['maf'] = np.zeros(p) + 0.5
+	zdata['maf'] = np.zeros(p) + maf
 	zdata['beta'] = correst
 	zdata['se'] = ses
 	zfname = f"{file_prefix}.z"
@@ -77,10 +77,12 @@ def run_finemap(
 	q, 
 	pi1, 
 	max_nsignal,
+	corr_config=0.95,
 	n_iter=100000,
 	n_config=50000,
 	sss_tol=0.001,
 	remove_data=True,
+	maf=0.5,
 	**kwargs, # kwargs for all_cand_groups
 ):
 	# Create data
@@ -91,6 +93,7 @@ def run_finemap(
 		pi1=pi1,
 		file_prefix=file_prefix,
 		max_nsignal=max_nsignal,
+		maf=maf,
 	)
 	# Construct command and run 
 	# First, locate finemap
@@ -111,7 +114,7 @@ def run_finemap(
 	cmd.extend(["--n-iter", str(n_iter)])
 	cmd.extend(["--n-configs-top", str(n_config)])
 	cmd.extend(["--prob-conv-sss-tol", str(sss_tol)])
-	cmd.extend(["--corr-config", str(0.99)])
+	cmd.extend(["--corr-config", str(corr_config)])
 	cmd.extend(["--prob-cred-set", str(1-q)])
 	cmd.extend(["--prior-k"])
 	cmd.extend(["--log"])
