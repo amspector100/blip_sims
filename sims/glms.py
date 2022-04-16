@@ -77,8 +77,14 @@ def single_seed_sim(
 	)
 	X, y, beta, V = generate_regression_data(**sample_kwargs)
 
-	# Method 0: DAP
+	# Parse args for cand groups
 	q = args.get('q', [0.1])[0]
+	max_pep = args.get('max_pep', [2*q])[0]
+	max_size = args.get('max_size', [25])[0]
+	prenarrow = args.get('prenarrow', [0])[0]	
+	levels = args.get('levels', [8])[0]
+
+	# Method 0: DAP and FINEMAP
 	if p <= 1000 and args.get("run_dap", [False])[0]:
 		t0 = time.time()
 		rej_dap, _, _ = blip_sims.dap.run_dap(
@@ -87,7 +93,7 @@ def single_seed_sim(
 			q=q, 
 			file_prefix=dap_prefix + str(seed), 
 			pi1=str(sparsity),
-			msize=str(1.1 * sparsity * p),
+			msize=str(int(1.1 * sparsity * p)),
 		)
 		nfd, fdr, power = utilities.rejset_power(rej_dap, beta=beta)
 		ntd = len(rej_dap) - nfd
@@ -95,12 +101,48 @@ def single_seed_sim(
 		output.append(
 			["dap-g", "NA", dap_time, 0, power, ntd, nfd, fdr, True, 0] + dgp_args
 		)
+	if args.get("run_finemap", [False])[0]:
+		t0 = time.time()
+		rej_finemap, cand_groups = blip_sims.finemap.run_finemap(
+			file_prefix=dap_prefix + "_finemap",
+			X=X,
+			y=y,
+			q=q,
+			pi1=sparsity,
+			max_nsignal=int(1.1 * sparsity * p),
+			n_iter=args.get("n_iter_finemap", [100000])[0],
+			n_config=args.get("n_config_finemap", [50000])[0],
+			max_pep=max_pep,
+			max_size=max_size,
+			prenarrow=prenarrow,
+		)
+		# For fairness same max size (also allows disjointness)
+		rej_finemap = [x for x in rej_finemap if len(x) <= max_size]
+		fmap_time = time.time() - t0
+		t0 = time.time()
+		detections = pyblip.blip.BLiP(
+			cand_groups=cand_groups,
+			q=q,
+			error='fdr',
+			max_pep=max_pep,
+			perturb=True,
+			deterministic=True
+		)
+		blip_time = time.time() - t0
+		detect_sets = [
+			list(cg.group) for cg in detections
+		]
+		for method, csets, btime in zip(
+			['FINEMAP', 'FINEMAP + BLiP'],
+			[rej_finemap, detect_sets],
+			[0, blip_time],
+		):
+			nfd, fdr, power = utilities.rejset_power([list(x) for x in csets], beta=beta)
+			ntd = len(csets) - nfd	
+			output.append(
+				[method, "all", fmap_time, btime, power, ntd, nfd, fdr, True, 0] + dgp_args
+			)
 
-	# Parse args for cand groups
-	max_pep = args.get('max_pep', [2*q])[0]
-	max_size = args.get('max_size', [25])[0]
-	prenarrow = args.get('prenarrow', [0])[0]	
-	levels = args.get('levels', [8])[0]
 	# F-tests + FBH/Yekutieli
 	if kappa > 1 and args.get('run_ftests', [False])[0]:
 		t0 = time.time()
@@ -193,7 +235,7 @@ def single_seed_sim(
 				inclusions = model.betas != 0
 				mtime = time.time() - t0
 				# Calculate PIPs and cand groups
-				for cgroup in args.get('cgroups', ['all', 'seq', 'fbh']):
+				for cgroup in args.get('cgroups', ['all']):
 					t0 = time.time()
 					if cgroup == 'all':
 						cand_groups = pyblip.create_groups.all_cand_groups(

@@ -1,6 +1,7 @@
 from . import bcp
 from . import crt
 from . import dap
+from . import finemap
 from . import gen_data
 from . import nsp
 from . import parser
