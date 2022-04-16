@@ -104,7 +104,7 @@ def single_seed_sim(
 	if args.get("run_finemap", [False])[0]:
 		t0 = time.time()
 		rej_finemap, cand_groups = blip_sims.finemap.run_finemap(
-			file_prefix=dap_prefix + "_finemap",
+			file_prefix=dap_prefix + "_finemap" + str(seed),
 			X=X,
 			y=y,
 			q=q,

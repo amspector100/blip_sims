@@ -91,7 +91,7 @@ def run_finemap(
 		max_nsignal=max_nsignal,
 	)
 	# Construct command and run 
-	# First, locate dap
+	# First, locate finemap
 	finemap_executable = "finemap/finemap_v1.4.1_x86_64"
 	for i in range(3):
 		if os.path.exists(finemap_executable):
@@ -99,7 +99,7 @@ def run_finemap(
 		else:
 			finemap_executable = "../" + finemap_executable
 		if i == 2:
-			raise ValueError("Could not find dap source")
+			raise ValueError("Could not find FINEMAP source")
 
 	# Example: dap-g -d_z sim.1.zval.dat -d_ld sim.1.LD.dat -t 4 -o output.zval -l log.zval
 	cmd = [finemap_executable]
