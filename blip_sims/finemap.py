@@ -161,7 +161,7 @@ def run_finemap(
 	)
 
 	# Delete unnecessary files
-	to_delete = glob.glob(f"{file_prefix}*")
+	to_delete = glob.glob(f"{file_prefix}.*")
 	for fname in to_delete:
 		os.remove(fname)
 	return default_credsets, cand_groups 
