@@ -164,4 +164,5 @@ def run_finemap(
 	to_delete = glob.glob(f"{file_prefix}.*")
 	for fname in to_delete:
 		os.remove(fname)
+	os.remove(file_prefix) # master file
 	return default_credsets, cand_groups 
