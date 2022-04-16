@@ -79,6 +79,8 @@ def run_finemap(
 	max_nsignal,
 	n_iter=100000,
 	n_config=50000,
+	sss_tol=0.001,
+	remove_data=True,
 	**kwargs, # kwargs for all_cand_groups
 ):
 	# Create data
@@ -108,6 +110,7 @@ def run_finemap(
 	#cmd.extend(["--n-causal-snps", str(max_nsignal)])
 	cmd.extend(["--n-iter", str(n_iter)])
 	cmd.extend(["--n-configs-top", str(n_config)])
+	cmd.extend(["--prob-conv-sss-tol", str(sss_tol)])
 	cmd.extend(["--corr-config", str(0.99)])
 	cmd.extend(["--prob-cred-set", str(1-q)])
 	cmd.extend(["--prior-k"])
@@ -161,8 +164,9 @@ def run_finemap(
 	)
 
 	# Delete unnecessary files
-	to_delete = glob.glob(f"{file_prefix}.*")
-	for fname in to_delete:
-		os.remove(fname)
-	os.remove(file_prefix) # master file
+	if remove_data:
+		to_delete = glob.glob(f"{file_prefix}.*")
+		for fname in to_delete:
+			os.remove(fname)
+		os.remove(file_prefix) # master file
 	return default_credsets, cand_groups 
