@@ -109,7 +109,7 @@ def single_seed_sim(
 			X=X,
 			y=y,
 			q=q,
-			pi1=sparsity,
+			pi1=args.get("finemap_pi1", [sparsity])[0],
 			max_nsignal=args.get("max_nsignal", [int(1.2 * sparsity * p)])[0],
 			n_iter=args.get("n_iter_finemap", [10000])[0],
 			n_config=args.get("n_config_finemap", [50000])[0],
