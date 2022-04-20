@@ -114,7 +114,6 @@ def run_finemap(
 		cmd = [finemap_executable]
 		cmd.extend(["--sss"])
 		cmd.extend(["--in-files", file_prefix_chain])
-		#cmd.extend(["--n-causal-snps", str(max_nsignal)])
 		cmd.extend(["--n-iter", str(n_iter)])
 		cmd.extend(["--n-configs-top", str(n_config)])
 		cmd.extend(["--prob-conv-sss-tol", str(sss_tol)])
