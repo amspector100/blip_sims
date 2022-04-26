@@ -13,10 +13,10 @@ Note that a variety of other code and software was published with the paper, whi
 
 The directory ``blip_sims/`` contains extraneous functions used in the simulations. You should think of this as a supplemental package (for example, it contains code to run the distilled conditional randomization test).
 
-THe directory ``sims/`` contains the code which actually runs the simulations. It also contains ``.sh`` files which will replicate the figures.
+The directory ``sims/`` contains the code which actually runs the simulations. It also contains ``.sh`` files which will replicate the figures.
 
-In particular, the main figures in the paper can be replicated using the following scripts and their respective .sh files. Note that the figure names line up with the arXiv version.
+In particular, the main simulations in the paper can be replicated using the following scripts (their respective .sh files show how to use them). Note that the figure names line up with the arXiv version.
 
-Figures 1, 10, 11: ``sims/lp_int_sol.py``
-Figures 2, 3, 4, 14: ``sims/glms.py``
-Figures 16, 17, 18: ``sims/changepoint.py``
+- Figures 1, 10, 11: ``sims/lp_int_sol.py``
+- Figures 2, 3, 4, 14: ``sims/glms.py``
+- Figures 16, 17, 18: ``sims/changepoint.py``
