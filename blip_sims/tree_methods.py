@@ -67,6 +67,7 @@ class PNode():
 		self.synth_root = True
 
 class PTree():
+	"""Tree of p-values"""
 
 	def __init__(self, nodes):
 		# Find roots of tree
@@ -132,28 +133,41 @@ class PTree():
 		"""
 		return self._single_root_yekutieli(self._synth_root, q=q)
 
+	def leaf_bh(self, q=0.1):
+		"""
+		Apply Benjamini-Hochberg to the leaves of the tree
+		"""
+		leaves = [
+			node for node in self.nodes if len(node.children) == 0
+		]
+		leaf_flags = multipletests(
+			[l.p for l in leaves], alpha=q, method='fdr_bh',
+		)[0]
+		leaf_rej = [x for (j, x) in enumerate(leaves) if leaf_flags[j] == 1]
+		return leaf_rej, leaf_rej
+
 	def tree_fbh(self, q=0.1):
-			"""
-			Focused-BH for outer-nodes control on trees.
-			"""
-			# Iterate through pvals from largest to smallest
-			all_pvals = sorted(
-				np.unique([node.p for node in self.nodes]),
-				key = lambda x: -1*x
-			)
-			for threshold in all_pvals:
-				R = [node for node in self.nodes if node.p <= threshold]
-				outer_nodes = [
-					node for node in R
-					if np.all(np.array([x.p for x in node.children]) > threshold)
-				]
-				# FDP estimate
-				hat_FDP = len(self.nodes) * threshold / len(outer_nodes)
-				if hat_FDP <= q:
-					return outer_nodes, threshold
-			
-			# If nothing controls FDP estimate, 
-			return [], 0
+		"""
+		Focused-BH for outer-nodes control on trees.
+		"""
+		# Iterate through pvals from largest to smallest
+		all_pvals = sorted(
+			np.unique([node.p for node in self.nodes]),
+			key = lambda x: -1*x
+		)
+		for threshold in all_pvals:
+			R = [node for node in self.nodes if node.p <= threshold]
+			outer_nodes = [
+				node for node in R
+				if np.all(np.array([x.p for x in node.children]) > threshold)
+			]
+			# FDP estimate
+			hat_FDP = len(self.nodes) * threshold / len(outer_nodes)
+			if hat_FDP <= q:
+				return outer_nodes, threshold
+		
+		# If nothing controls FDP estimate, 
+		return [], 0
 
 	def find_subtree(self, node):
 		"""

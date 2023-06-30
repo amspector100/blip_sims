@@ -29,6 +29,8 @@ COLUMNS = [
 	'ntd',
 	'nfd',
 	'fdr',
+	'med_group_size',
+	'n_indiv_disc',
 	'well_specified',
 	'nsample',
 	'y_dist',
@@ -40,6 +42,20 @@ COLUMNS = [
 	'coeff_size',
 	'seed', 
 ]
+
+def power_fdr_metrics(rej, beta, how='cgs'):
+	# depending on the object involved call different fns
+	if how != 'cgs':
+		nfd, fdr, power = utilities.rejset_power(rej, beta=beta)
+		med_group_size = np.median([len(x) for x in rej])
+		n_indiv_disc = len([x for x in rej if len(x) == 1 and np.any(beta[x]) != 0])
+	else:
+		nfd, fdr, power = utilities.nodrej2power(rej, beta)
+		med_group_size = np.median([len(x.group) for x in rej])
+		n_indiv_disc = len([x for x in rej if len(x.group) == 1 and np.any(beta[list(x.group)] != 0)])
+	# return
+	ntd = len(rej) - nfd
+	return [power, ntd, nfd, fdr, med_group_size, n_indiv_disc]
 
 def single_seed_sim(
 	seed,
@@ -96,74 +112,72 @@ def single_seed_sim(
 			pi1=str(sparsity),
 			msize=str(int(1.1 * sparsity * p)),
 		)
-		nfd, fdr, power = utilities.rejset_power(rej_dap, beta=beta)
-		ntd = len(rej_dap) - nfd
 		dap_time = time.time() - t0
+		metrics = power_fdr_metrics(rej_dap, beta=beta, how='rejset')
 		output.append(
-			["dap-g", "NA", dap_time, 0, power, ntd, nfd, fdr, True, 0] + dgp_args
+			["dap-g", "NA", dap_time, 0] + metrics +  [True, 0] + dgp_args
 		)
-	if args.get("run_finemap", [False])[0]:
-		t0 = time.time()
-		rej_finemap, cand_groups = blip_sims.finemap.run_finemap(
-			file_prefix=dap_prefix + "_finemap" + str(seed),
-			X=X,
-			y=y,
-			q=q,
-			pi1=args.get("finemap_pi1", [1 / p])[0],
-			max_nsignal=args.get("max_nsignal", [int(1.2 * sparsity * p)])[0],
-			n_iter=args.get("n_iter_finemap", [10000])[0],
-			n_config=args.get("n_config_finemap", [50000])[0],
-			sss_tol=args.get("sss_tol", [0.001])[0],
-			max_pep=max_pep,
-			max_size=max_size,
-			prenarrow=prenarrow,
-			corr_config=args.get("corr_config", [0.95])[0],
-			finemap_chains=finemap_chains,
-		)
-		# For fairness same max size (also allows disjointness)
-		rej_finemap = [x for x in rej_finemap if len(x) <= max_size]
-		fmap_time = time.time() - t0
-		t0 = time.time()
-		detections = pyblip.blip.BLiP(
-			cand_groups=cand_groups,
-			q=q,
-			error='fdr',
-			max_pep=max_pep,
-			perturb=True,
-			deterministic=True
-		)
-		blip_time = time.time() - t0
-		detect_sets = [
-			list(cg.group) for cg in detections
-		]
-		for method, csets, btime in zip(
-			['FINEMAP', 'FINEMAP + BLiP'],
-			[rej_finemap, detect_sets],
-			[0, blip_time],
-		):
-			nfd, fdr, power = utilities.rejset_power([list(x) for x in csets], beta=beta)
-			ntd = len(csets) - nfd	
-			output.append(
-				[method, "all", fmap_time, btime, power, ntd, nfd, fdr, True, 0] + dgp_args
-			)
+	# if args.get("run_finemap", [False])[0]:
+	# 	t0 = time.time()
+	# 	rej_finemap, cand_groups = blip_sims.finemap.run_finemap(
+	# 		file_prefix=dap_prefix + "_finemap" + str(seed),
+	# 		X=X,
+	# 		y=y,
+	# 		q=q,
+	# 		pi1=args.get("finemap_pi1", [1 / p])[0],
+	# 		max_nsignal=args.get("max_nsignal", [int(1.2 * sparsity * p)])[0],
+	# 		n_iter=args.get("n_iter_finemap", [10000])[0],
+	# 		n_config=args.get("n_config_finemap", [50000])[0],
+	# 		sss_tol=args.get("sss_tol", [0.001])[0],
+	# 		max_pep=max_pep,
+	# 		max_size=max_size,
+	# 		prenarrow=prenarrow,
+	# 		corr_config=args.get("corr_config", [0.95])[0],
+	# 		finemap_chains=finemap_chains,
+	# 	)
+	# 	# For fairness same max size (also allows disjointness)
+	# 	rej_finemap = [x for x in rej_finemap if len(x) <= max_size]
+	# 	fmap_time = time.time() - t0
+	# 	t0 = time.time()
+	# 	detections = pyblip.blip.BLiP(
+	# 		cand_groups=cand_groups,
+	# 		q=q,
+	# 		error='fdr',
+	# 		max_pep=max_pep,
+	# 		perturb=True,
+	# 		deterministic=True
+	# 	)
+	# 	blip_time = time.time() - t0
+	# 	detect_sets = [
+	# 		list(cg.group) for cg in detections
+	# 	]
+	# 	for method, csets, btime in zip(
+	# 		['FINEMAP', 'FINEMAP + BLiP'],
+	# 		[rej_finemap, detect_sets],
+	# 		[0, blip_time],
+	# 	):
+	# 		metrics = power_fdr_metrics(csets, beta=beta, how='rejset')
+	# 		output.append(
+	# 			[method, "all", fmap_time, btime] + metrics + [True, 0] + dgp_args
+	# 		)
 
-	# F-tests + FBH/Yekutieli
-	if kappa > 1 and args.get('run_ftests', [False])[0]:
-		t0 = time.time()
-		regtree = blip_sims.tree_methods.RegressionTree(
-			X=X, y=y, levels=levels, max_size=max_size
-		)
-		regtree.fit(family='gaussian') # this works better than using family = binomial 
-		# even when y follows a binomial distribution
-		mtime = time.time() - t0
-		_, rej_yek = regtree.ptree.outer_nodes_yekutieli(q=q)
-		rej_fbh, _ = regtree.ptree.tree_fbh(q=q)
-		for mname, rej in zip(['FBH', 'Yekutieli'], [rej_fbh, rej_yek]):
-			nfd, fdr, power = utilities.nodrej2power(rej, beta)
-			ntd = len(rej) - nfd
-			output.append(
-				[mname, "fbh", mtime, 0, power, ntd, nfd, fdr, True, 0] + dgp_args
-			)
+	# # F-tests + FBH/Yekutieli
+	# if kappa > 1 and args.get('run_ftests', [False])[0]:
+	# 	t0 = time.time()
+	# 	regtree = blip_sims.tree_methods.RegressionTree(
+	# 		X=X, y=y, levels=levels, max_size=max_size
+	# 	)
+	# 	regtree.fit(family='gaussian') # this works better than using family = binomial 
+	# 	# even when y follows a binomial distribution
+	# 	mtime = time.time() - t0
+	# 	_, rej_yek = regtree.ptree.outer_nodes_yekutieli(q=q)
+	# 	rej_fbh, _ = regtree.ptree.tree_fbh(q=q)
+	# 	for mname, rej in zip(['FBH', 'Yekutieli'], [rej_fbh, rej_yek]):
+	# 		metrics = power_fdr_metrics(rej, beta=beta, how='cgs')
+	# 		output.append(
+	# 			[mname, "fbh", mtime, 0] + metrics + [True, 0] + dgp_args
+	# 		)
+
 	# CRT + FBH/Yekutieli
 	if args.get('run_crt', [True])[0]:
 		t0 = time.time()
@@ -174,11 +188,14 @@ def single_seed_sim(
 		mtime = time.time() - t0
 		_, rej_yek = crt_model.pTree.outer_nodes_yekutieli(q=q)
 		rej_fbh, _ = crt_model.pTree.tree_fbh(q=q)
-		for mname, rej in zip(['CRT + FBH', 'CRT + Yekutieli'], [rej_fbh, rej_yek]):
-			nfd, fdr, power = utilities.nodrej2power(rej, beta)
-			ntd = len(rej) - nfd
+		rej_bh, _ = crt_model.pTree.leaf_bh(q=q)
+		for mname, rej in zip(
+			['CRT + FBH', 'CRT + Yekutieli', 'CRT + BH'],
+			[rej_fbh, rej_yek, rej_bh]
+		):
+			metrics = power_fdr_metrics(rej, beta=beta, how='cgs')
 			output.append(
-				[mname, "fbh", mtime, 0, power, ntd, nfd, fdr, True, 0] + dgp_args
+				[mname, "tree", mtime, 0] + metrics + [True, 0] + dgp_args
 			)
 
 	# Gibbs + BLiP
@@ -238,6 +255,22 @@ def single_seed_sim(
 				model.sample(**skwargs)
 				inclusions = model.betas != 0
 				mtime = time.time() - t0
+
+				### Baseline (only indiv discoveries)
+				peps = 1 - inclusions.mean(axis=0)
+				fdrs = np.cumsum(np.sort(peps)) / np.arange(1, p+1)
+				if np.any(fdrs <= q):
+					thresh = np.where(fdrs <= q)[0].max() + 1
+					rej = np.argsort(peps)[0:thresh]
+				else:
+					rej = []
+				rej = [[r] for r in rej]
+				metrics = power_fdr_metrics(rej, beta=beta, how='rejset')
+				basename = mname.split("+")[0] + "(indiv only)"
+				output.append(
+					[basename, 'none', mtime, 0] + metrics + [well_specified, nsample] + dgp_args
+				)
+
 				# Calculate PIPs and cand groups
 				for cgroup in args.get('cgroups', ['all']):
 					t0 = time.time()
@@ -283,10 +316,9 @@ def single_seed_sim(
 						deterministic=True
 					)
 					blip_time = time.time() - t0
-					nfd, fdr, power = utilities.nodrej2power(detections, beta)
-					ntd = len(detections) - nfd
+					metrics = power_fdr_metrics(detections, beta=beta, how='cgs')
 					output.append(
-						[mname, cgroup, mtime, blip_time, power, ntd, nfd, fdr, well_specified, nsample] + dgp_args
+						[mname, cgroup, mtime, blip_time] + metrics + [well_specified, nsample] + dgp_args
 					)
 
 	# Method Type 2: susie-based methods
@@ -296,12 +328,9 @@ def single_seed_sim(
 			X, y, L=np.ceil(p*sparsity), q=q
 		)
 		susie_time = time.time() - t0
-		nfd, fdr, power = blip_sims.utilities.rejset_power(
-			susie_sets, beta
-		)
-		ntd = len(susie_sets) - nfd
+		metrics = power_fdr_metrics(susie_sets, beta=beta, how='rejset')
 		output.append(
-			['susie', 'susie', susie_time, 0, power, ntd, nfd, fdr, True, 0] + dgp_args
+			['susie', 'susie', susie_time, 0] + metrics + [True, 0] + dgp_args
 		)
 		# Now apply BLiP on top of susie
 		t0 = time.time()
@@ -322,10 +351,9 @@ def single_seed_sim(
 			deterministic=True
 		)
 		blip_time = time.time() - t0
-		nfd, fdr, power = utilities.nodrej2power(detections, beta)
-		ntd = len(detections) - nfd
+		metrics = power_fdr_metrics(detections, beta=beta, how='cgs')
 		output.append(
-			['susie + BLiP', "susie", susie_time, blip_time, power, ntd, nfd, fdr, True, 0] + dgp_args
+			['susie + BLiP', "susie", susie_time, blip_time] + metrics + [True, 0] + dgp_args
 		)
 		
 	return output
@@ -391,7 +419,7 @@ def main(args):
 									'method', 'cgroups', 'y_dist', 'covmethod', 'kappa', 
 									'p', 'sparsity', 'k', 'well_specified', 'nsample'
 								]
-								meas = ['model_time', 'blip_time', 'power', 'ntd', 'fdr']
+								meas = ['model_time', 'blip_time', 'power', 'ntd', 'fdr', 'med_group_size', 'n_indiv_disc']
 								summary_df = out_df.groupby(groupers)[meas].mean()
 								print(summary_df.reset_index())
 
