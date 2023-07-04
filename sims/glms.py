@@ -115,7 +115,7 @@ def single_seed_sim(
 	levels = args.get('levels', [8])[0]
 	finemap_chains = args.get("finemap_chains", [5])[0]
 
-	# Method 0: DAP and FINEMAP
+	# Method 0: DAP
 	if p <= 1000 and args.get("run_dap", [False])[0]:
 		t0 = time.time()
 		rej_dap, _, _ = blip_sims.dap.run_dap(
@@ -131,6 +131,9 @@ def single_seed_sim(
 		output.append(
 			["dap-g", "NA", dap_time, 0] + metrics +  [True, 0] + dgp_args
 		)
+		print(f"At seed={seed}, dgp_args={dgp_args}, finished DAP at time {utilities.elapsed(t0)}.")
+		sys.stdout.flush()
+		
 	# if args.get("run_finemap", [False])[0]:
 	# 	t0 = time.time()
 	# 	rej_finemap, cand_groups = blip_sims.finemap.run_finemap(
@@ -211,6 +214,8 @@ def single_seed_sim(
 			output.append(
 				[mname, "tree", mtime, 0] + metrics + [True, 0] + dgp_args
 			)
+		print(f"At seed={seed}, dgp_args={dgp_args}, finished CRT at time {utilities.elapsed(t0)}.")
+		sys.stdout.flush()
 
 	# Gibbs + BLiP
 	for well_specified in args.get('well_specified', [False, True]):
@@ -334,6 +339,8 @@ def single_seed_sim(
 					output.append(
 						[mname, cgroup, mtime, blip_time] + metrics + [well_specified, nsample] + dgp_args
 					)
+					print(f"At seed={seed}, dgp_args={dgp_args}, finished {mname} at time {utilities.elapsed(t0)}.")
+					sys.stdout.flush()
 
 	# Method Type 2: susie-based methods
 	if args.get('run_susie', [True])[0]:
@@ -369,6 +376,8 @@ def single_seed_sim(
 		output.append(
 			['susie + BLiP', "susie", susie_time, blip_time] + metrics + [True, 0] + dgp_args
 		)
+		print(f"At seed={seed}, dgp_args={dgp_args}, finished SuSiE at time {utilities.elapsed(t0)}.")
+		sys.stdout.flush()
 		
 	return output
 
