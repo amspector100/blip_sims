@@ -31,6 +31,7 @@ COLUMNS = [
 	'fdr',
 	'med_group_size',
 	'n_indiv_disc',
+	'med_purity',
 	'well_specified',
 	'nsample',
 	'y_dist',
@@ -43,21 +44,31 @@ COLUMNS = [
 	'seed', 
 ]
 
-def power_fdr_metrics(rej, beta, how='cgs'):
+def purity(region, hatSig):
+	if len(region) == 1:
+		return 1.0
+	hatSigR = hatSig[region][:, region]
+	return np.abs(hatSigR).min()
+
+def power_fdr_metrics(rej, beta, hatSig, how='cgs'):
 	# depending on the object involved call different fns
 	if how != 'cgs':
 		nfd, fdr, power = utilities.rejset_power(rej, beta=beta)
 		med_group_size = np.median([len(x) for x in rej])
 		n_indiv_disc = len([x for x in rej if len(x) == 1 and np.any(beta[x]) != 0])
+		med_purity = np.median([purity(x, hatSig) for x in rej])
+		ntd = len(rej) - nfd
+		return [power, ntd, nfd, fdr, med_group_size, n_indiv_disc, med_purity]
 	else:
-		nfd, fdr, power = utilities.nodrej2power(rej, beta)
-		med_group_size = np.median([len(x.group) for x in rej])
-		n_indiv_disc = len([x for x in rej if len(x.group) == 1 and np.any(beta[list(x.group)] != 0)])
-	# return
-	ntd = len(rej) - nfd
-	return [power, ntd, nfd, fdr, med_group_size, n_indiv_disc]
+		return power_fdr_metrics(
+			[list(x.group) for x in rej], 
+			beta=beta,
+			hatSig=hatSig,
+			how='rejset'
+		)
 
 def single_seed_sim(
+	t0,
 	seed,
 	y_dist,
 	covmethod,
@@ -75,6 +86,8 @@ def single_seed_sim(
 	dgp_args = [
 		y_dist, covmethod, kappa, p, sparsity, k, coeff_size, seed
 	]
+	print(f"At seed={seed}, dgp_args={dgp_args} at time {utilities.elapsed(t0)}.")
+	sys.stdout.flush()
 
 	# Create data
 	n = int(kappa * p)
@@ -92,6 +105,7 @@ def single_seed_sim(
 		return_cov=True
 	)
 	X, y, beta, V = generate_regression_data(**sample_kwargs)
+	hatSig = np.corrcoef(X.T) # for purity computations
 
 	# Parse args for cand groups
 	q = args.get('q', [0.1])[0]
@@ -113,7 +127,7 @@ def single_seed_sim(
 			msize=str(int(1.1 * sparsity * p)),
 		)
 		dap_time = time.time() - t0
-		metrics = power_fdr_metrics(rej_dap, beta=beta, how='rejset')
+		metrics = power_fdr_metrics(rej_dap, beta=beta, hatSig=hatSig, how='rejset')
 		output.append(
 			["dap-g", "NA", dap_time, 0] + metrics +  [True, 0] + dgp_args
 		)
@@ -156,7 +170,7 @@ def single_seed_sim(
 	# 		[rej_finemap, detect_sets],
 	# 		[0, blip_time],
 	# 	):
-	# 		metrics = power_fdr_metrics(csets, beta=beta, how='rejset')
+	# 		metrics = power_fdr_metrics(csets, beta=beta, hatSig=hatSig, how='rejset')
 	# 		output.append(
 	# 			[method, "all", fmap_time, btime] + metrics + [True, 0] + dgp_args
 	# 		)
@@ -173,7 +187,7 @@ def single_seed_sim(
 	# 	_, rej_yek = regtree.ptree.outer_nodes_yekutieli(q=q)
 	# 	rej_fbh, _ = regtree.ptree.tree_fbh(q=q)
 	# 	for mname, rej in zip(['FBH', 'Yekutieli'], [rej_fbh, rej_yek]):
-	# 		metrics = power_fdr_metrics(rej, beta=beta, how='cgs')
+	# 		metrics = power_fdr_metrics(rej, beta=beta, hatSig=hatSig, how='cgs')
 	# 		output.append(
 	# 			[mname, "fbh", mtime, 0] + metrics + [True, 0] + dgp_args
 	# 		)
@@ -193,7 +207,7 @@ def single_seed_sim(
 			['CRT + FBH', 'CRT + Yekutieli', 'CRT + BH'],
 			[rej_fbh, rej_yek, rej_bh]
 		):
-			metrics = power_fdr_metrics(rej, beta=beta, how='cgs')
+			metrics = power_fdr_metrics(rej, beta=beta, hatSig=hatSig, how='cgs')
 			output.append(
 				[mname, "tree", mtime, 0] + metrics + [True, 0] + dgp_args
 			)
@@ -265,7 +279,7 @@ def single_seed_sim(
 				else:
 					rej = []
 				rej = [[r] for r in rej]
-				metrics = power_fdr_metrics(rej, beta=beta, how='rejset')
+				metrics = power_fdr_metrics(rej, beta=beta, hatSig=hatSig, how='rejset')
 				basename = mname.split("+")[0] + "(indiv only)"
 				output.append(
 					[basename, 'none', mtime, 0] + metrics + [well_specified, nsample] + dgp_args
@@ -316,7 +330,7 @@ def single_seed_sim(
 						deterministic=True
 					)
 					blip_time = time.time() - t0
-					metrics = power_fdr_metrics(detections, beta=beta, how='cgs')
+					metrics = power_fdr_metrics(detections, beta=beta, hatSig=hatSig, how='cgs')
 					output.append(
 						[mname, cgroup, mtime, blip_time] + metrics + [well_specified, nsample] + dgp_args
 					)
@@ -328,7 +342,7 @@ def single_seed_sim(
 			X, y, L=np.ceil(p*sparsity), q=q
 		)
 		susie_time = time.time() - t0
-		metrics = power_fdr_metrics(susie_sets, beta=beta, how='rejset')
+		metrics = power_fdr_metrics(susie_sets, beta=beta, hatSig=hatSig, how='rejset')
 		output.append(
 			['susie', 'susie', susie_time, 0] + metrics + [True, 0] + dgp_args
 		)
@@ -351,7 +365,7 @@ def single_seed_sim(
 			deterministic=True
 		)
 		blip_time = time.time() - t0
-		metrics = power_fdr_metrics(detections, beta=beta, how='cgs')
+		metrics = power_fdr_metrics(detections, beta=beta, hatSig=hatSig, how='cgs')
 		output.append(
 			['susie + BLiP', "susie", susie_time, blip_time] + metrics + [True, 0] + dgp_args
 		)
@@ -365,17 +379,19 @@ def main(args):
 	sys.stdout.flush()
 	reps = args.get('reps', [1])[0]
 	num_processes = args.get('num_processes', [1])[0]
+	# parse job id and seed start
+	seed_start = max(args.get('seed_start', [1])[0], 1)
+	job_id = int(args.pop("job_id", [0])[0])
 
 	# Save args, create output dir
 	output_dir, today, hour = utilities.create_output_directory(
 		args, dir_type=DIR_TYPE, return_date=True
 	)
-	result_path = output_dir + "/results.csv"
+	result_path = output_dir + f"/results_id{job_id}_seedstart{seed_start}.csv"
 
 	# Run outputs
 	time0 = time.time()
 	all_outputs = []
-	seed_start = max(args.get('seed_start', [1])[0], 1)
 	for covmethod in args.get('covmethod', ['ark']):
 		for p in args.get('p', [500]):
 			for kappa in args.get('kappa',[0.2]):
@@ -391,6 +407,7 @@ def main(args):
 									sparsity=sparsity,
 									k=k,
 									coeff_size=coeff_size,
+									t0=time0,
 								)
 								msg = f"Finished with {constant_inputs}"
 								dap_prefix = blip_sims.utilities.create_dap_prefix(
@@ -419,7 +436,7 @@ def main(args):
 									'method', 'cgroups', 'y_dist', 'covmethod', 'kappa', 
 									'p', 'sparsity', 'k', 'well_specified', 'nsample'
 								]
-								meas = ['model_time', 'blip_time', 'power', 'ntd', 'fdr', 'med_group_size', 'n_indiv_disc']
+								meas = ['model_time', 'blip_time', 'power', 'ntd', 'fdr', 'med_group_size', 'med_purity', 'n_indiv_disc']
 								summary_df = out_df.groupby(groupers)[meas].mean()
 								print(summary_df.reset_index())
 
