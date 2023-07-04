@@ -149,7 +149,7 @@ def create_output_directory(args, dir_type='misc', return_date=False):
 	# Ensure directory exists
 	print(f"Output directory is {output_dir}")
 	if not os.path.exists(output_dir):
-		os.makedirs(output_dir)
+		os.makedirs(output_dir, exist_ok=True)
 	# Save description
 	args_path = output_dir + "args.json"
 	with open(args_path, 'w') as thefile:
