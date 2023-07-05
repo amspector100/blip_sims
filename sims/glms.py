@@ -68,7 +68,7 @@ def power_fdr_metrics(rej, beta, hatSig, how='cgs'):
 		)
 
 def single_seed_sim(
-	t0,
+	global_t0,
 	seed,
 	y_dist,
 	covmethod,
@@ -86,7 +86,7 @@ def single_seed_sim(
 	dgp_args = [
 		y_dist, covmethod, kappa, p, sparsity, k, coeff_size, seed
 	]
-	print(f"At seed={seed}, dgp_args={dgp_args} at time {utilities.elapsed(t0)}.")
+	print(f"At seed={seed}, dgp_args={dgp_args} at time {utilities.elapsed(global_t0)}.")
 	sys.stdout.flush()
 
 	# Create data
@@ -100,6 +100,8 @@ def single_seed_sim(
 		k=k,
 		coeff_dist=args.get('coeff_dist', ['normal'])[0],
 		coeff_size=coeff_size,
+		alpha0=args.get("alpha0", [0.2])[0],
+		max_corr=args.get("max_corr", [0.99])[0],
 		min_coeff=args.get('min_coeff', [0.1 * coeff_size])[0],
 		dgp_seed=seed,
 		return_cov=True
@@ -131,7 +133,7 @@ def single_seed_sim(
 		output.append(
 			["dap-g", "NA", dap_time, 0] + metrics +  [True, 0] + dgp_args
 		)
-		print(f"At seed={seed}, dgp_args={dgp_args}, finished DAP at time {utilities.elapsed(t0)}.")
+		print(f"At seed={seed}, dgp_args={dgp_args}, finished DAP at time {utilities.elapsed(global_t0)}.")
 		sys.stdout.flush()
 		
 	# if args.get("run_finemap", [False])[0]:
@@ -214,7 +216,7 @@ def single_seed_sim(
 			output.append(
 				[mname, "tree", mtime, 0] + metrics + [True, 0] + dgp_args
 			)
-		print(f"At seed={seed}, dgp_args={dgp_args}, finished CRT at time {utilities.elapsed(t0)}.")
+		print(f"At seed={seed}, dgp_args={dgp_args}, finished CRT at time {utilities.elapsed(global_t0)}.")
 		sys.stdout.flush()
 
 	# Gibbs + BLiP
@@ -339,7 +341,7 @@ def single_seed_sim(
 					output.append(
 						[mname, cgroup, mtime, blip_time] + metrics + [well_specified, nsample] + dgp_args
 					)
-					print(f"At seed={seed}, dgp_args={dgp_args}, finished {mname} at time {utilities.elapsed(t0)}.")
+					print(f"At seed={seed}, dgp_args={dgp_args}, finished {mname} at time {utilities.elapsed(global_t0)}.")
 					sys.stdout.flush()
 
 	# Method Type 2: susie-based methods
@@ -376,7 +378,7 @@ def single_seed_sim(
 		output.append(
 			['susie + BLiP', "susie", susie_time, blip_time] + metrics + [True, 0] + dgp_args
 		)
-		print(f"At seed={seed}, dgp_args={dgp_args}, finished SuSiE at time {utilities.elapsed(t0)}.")
+		print(f"At seed={seed}, dgp_args={dgp_args}, finished SuSiE at time {utilities.elapsed(global_t0)}.")
 		sys.stdout.flush()
 		
 	return output
@@ -416,7 +418,7 @@ def main(args):
 									sparsity=sparsity,
 									k=k,
 									coeff_size=coeff_size,
-									t0=time0,
+									global_t0=time0,
 								)
 								msg = f"Finished with {constant_inputs}"
 								dap_prefix = blip_sims.utilities.create_dap_prefix(
