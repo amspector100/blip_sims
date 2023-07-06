@@ -22,7 +22,7 @@ def create_sparse_coefficients(
 		nonnull_coefs = coeff_size * np.random.uniform(1/2, 1, size=kp)
 		nonnull_coefs *= (1 - 2*np.random.binomial(1, 0.5, size=kp))
 	elif coeff_dist == 'none':
-		nonnull_coeffs = coeff_size * (1 - 2*np.random.binomial(1, 0.5, size=kp))
+		nonnull_coefs = coeff_size * (1 - 2*np.random.binomial(1, 0.5, size=kp))
 	else:
 		raise ValueError(f"Unrecognized coeff_dist={coeff_dist}")
 	# Decide location of non-nulls

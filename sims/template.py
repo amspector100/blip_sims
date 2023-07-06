@@ -14,6 +14,18 @@ from context import pyblip
 # Specifies the type of simulation
 DIR_TYPE = os.path.split(os.path.abspath(__file__))[1].split(".py")[0]
 
+# columns of dataframe
+COLUMNS = [
+	'avg_jaccard',
+	'prop_identical',
+	'method',
+	'n',
+	'p',
+	'sparsity',
+	'coeff_size',
+	'seed',
+]
+
 
 def single_seed_sim(seed, args):
 	"""

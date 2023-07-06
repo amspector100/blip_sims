@@ -4,6 +4,20 @@ import rpy2.robjects.numpy2ri as numpy2ri
 import rpy2.robjects as ro
 from rpy2.rinterface_lib.embedded import RRuntimeError
 
+def _remove_redundant_groups(susie_sets):
+	# if flags[j] = 1, then set j is a superset of another rejection
+	# this means it is logically completely redundant and should
+	# be discarded.
+	flags = np.zeros(len(susie_sets))
+	sets = [set(x) for x in susie_sets]
+	for i, x1 in enumerate(sets):
+		# check if x2 \subset x1 for any x2
+		for x2 in sets:
+			if x2.issubset(x1) and x1 != x2:
+				flags[i] = True
+	return [x for (x, flag) in zip(susie_sets, flags) if not flag]
+
+
 def run_susie(
 	X,
 	y,
@@ -31,6 +45,9 @@ def run_susie(
 		]
 	except TypeError:
 		susie_sets = []
+	# remove redundant groups
+	susie_sets = _remove_redundant_groups(susie_sets)
+
 
 	return alphas, susie_sets
 

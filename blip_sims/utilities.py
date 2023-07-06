@@ -12,9 +12,22 @@ import pandas as pd
 from multiprocessing import Pool
 from functools import partial
 from itertools import product
+from tqdm import tqdm
 
 def elapsed(t0):
 	return np.around(time.time() - t0, 2)
+
+def vrange(n, verbose=False):
+	if not verbose:
+		return range(n)
+	else:
+		return tqdm(list(range(n)))
+
+def vqdm(l, verbose=False):
+	if not verbose:
+		return l
+	else:
+		return tqdm(l) 
 
 ### Multiprocessing helper
 def _one_arg_function(list_of_inputs, args, func, kwargs):

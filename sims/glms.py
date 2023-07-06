@@ -20,18 +20,12 @@ from sklearn import linear_model
 DIR_TYPE = os.path.split(os.path.abspath(__file__))[1].split(".py")[0]
 
 # columns of dataframe
+MAX_COUNT_SIZE = 25
 COLUMNS = [
 	'method',
 	'cgroups',
 	'model_time',
 	'blip_time',
-	'power', 
-	'ntd',
-	'nfd',
-	'fdr',
-	'med_group_size',
-	'n_indiv_disc',
-	'med_purity',
 	'well_specified',
 	'nsample',
 	'y_dist',
@@ -42,7 +36,18 @@ COLUMNS = [
 	'k',
 	'coeff_size',
 	'seed', 
+	# metrics,
+	'power', 
+	'ntd',
+	'nfd',
+	'fdr',
+	'med_group_size',
+	'n_indiv_disc',
+	'med_purity',
 ]
+# n disc
+for j in range(MAX_COUNT_SIZE):
+	COLUMNS.append(f"ntd_le_{j+1}")
 
 def purity(region, hatSig):
 	if len(region) == 1:
@@ -53,12 +58,21 @@ def purity(region, hatSig):
 def power_fdr_metrics(rej, beta, hatSig, how='cgs'):
 	# depending on the object involved call different fns
 	if how != 'cgs':
+		# main metrics
 		nfd, fdr, power = utilities.rejset_power(rej, beta=beta)
-		med_group_size = np.median([len(x) for x in rej])
+		# true positive flags + gsizes
+		tp_flags = np.array([np.any(beta[s] != 0) for s in rej])
+		gsizes = np.array([len(x) for x in rej])
+		# other metrics
+		med_group_size = np.median(gsizes)
 		n_indiv_disc = len([x for x in rej if len(x) == 1 and np.any(beta[x]) != 0])
 		med_purity = np.median([purity(x, hatSig) for x in rej])
 		ntd = len(rej) - nfd
-		return [power, ntd, nfd, fdr, med_group_size, n_indiv_disc, med_purity]
+		metrics = [power, ntd, nfd, fdr, med_group_size, n_indiv_disc, med_purity]
+		for j in range(1, MAX_COUNT_SIZE+1):
+			freqj = np.sum(((gsizes <= j) * (tp_flags)).astype(int))
+			metrics.append(freqj)
+		return metrics 
 	else:
 		return power_fdr_metrics(
 			[list(x.group) for x in rej], 
@@ -131,7 +145,7 @@ def single_seed_sim(
 		dap_time = time.time() - t0
 		metrics = power_fdr_metrics(rej_dap, beta=beta, hatSig=hatSig, how='rejset')
 		output.append(
-			["dap-g", "NA", dap_time, 0] + metrics +  [True, 0] + dgp_args
+			["dap-g", "NA", dap_time, 0] +  [True, 0] + dgp_args + metrics
 		)
 		print(f"At seed={seed}, dgp_args={dgp_args}, finished DAP at time {utilities.elapsed(global_t0)}.")
 		sys.stdout.flush()
@@ -177,7 +191,7 @@ def single_seed_sim(
 	# 	):
 	# 		metrics = power_fdr_metrics(csets, beta=beta, hatSig=hatSig, how='rejset')
 	# 		output.append(
-	# 			[method, "all", fmap_time, btime] + metrics + [True, 0] + dgp_args
+	# 			[method, "all", fmap_time, btime] + [True, 0] + dgp_args + metrics
 	# 		)
 
 	# # F-tests + FBH/Yekutieli
@@ -194,7 +208,7 @@ def single_seed_sim(
 	# 	for mname, rej in zip(['FBH', 'Yekutieli'], [rej_fbh, rej_yek]):
 	# 		metrics = power_fdr_metrics(rej, beta=beta, hatSig=hatSig, how='cgs')
 	# 		output.append(
-	# 			[mname, "fbh", mtime, 0] + metrics + [True, 0] + dgp_args
+	# 			[mname, "fbh", mtime, 0] + [True, 0] + dgp_args + metrics
 	# 		)
 
 	# CRT + FBH/Yekutieli
@@ -203,7 +217,7 @@ def single_seed_sim(
 		screen = args.get('screen', [True])[0]
 		# Run CRT
 		crt_model = blip_sims.crt.MultipleDCRT(y=y, X=X, Sigma=V, screen=screen)
-		crt_model.multiple_pvals(levels=levels, max_size=max_size)
+		crt_model.multiple_pvals(levels=levels, max_size=max_size, verbose=False)
 		mtime = time.time() - t0
 		_, rej_yek = crt_model.pTree.outer_nodes_yekutieli(q=q)
 		rej_fbh, _ = crt_model.pTree.tree_fbh(q=q)
@@ -214,7 +228,7 @@ def single_seed_sim(
 		):
 			metrics = power_fdr_metrics(rej, beta=beta, hatSig=hatSig, how='cgs')
 			output.append(
-				[mname, "tree", mtime, 0] + metrics + [True, 0] + dgp_args
+				[mname, "tree", mtime, 0] + [True, 0] + dgp_args + metrics
 			)
 		print(f"At seed={seed}, dgp_args={dgp_args}, finished CRT at time {utilities.elapsed(global_t0)}.")
 		sys.stdout.flush()
@@ -289,7 +303,7 @@ def single_seed_sim(
 				metrics = power_fdr_metrics(rej, beta=beta, hatSig=hatSig, how='rejset')
 				basename = mname.split("+")[0] + "(indiv only)"
 				output.append(
-					[basename, 'none', mtime, 0] + metrics + [well_specified, nsample] + dgp_args
+					[basename, 'none', mtime, 0] + [well_specified, nsample] + dgp_args + metrics
 				)
 
 				# Calculate PIPs and cand groups
@@ -339,7 +353,7 @@ def single_seed_sim(
 					blip_time = time.time() - t0
 					metrics = power_fdr_metrics(detections, beta=beta, hatSig=hatSig, how='cgs')
 					output.append(
-						[mname, cgroup, mtime, blip_time] + metrics + [well_specified, nsample] + dgp_args
+						[mname, cgroup, mtime, blip_time] + [well_specified, nsample] + dgp_args + metrics
 					)
 					print(f"At seed={seed}, dgp_args={dgp_args}, finished {mname} at time {utilities.elapsed(global_t0)}.")
 					sys.stdout.flush()
@@ -353,7 +367,7 @@ def single_seed_sim(
 		susie_time = time.time() - t0
 		metrics = power_fdr_metrics(susie_sets, beta=beta, hatSig=hatSig, how='rejset')
 		output.append(
-			['susie', 'susie', susie_time, 0] + metrics + [True, 0] + dgp_args
+			['susie', 'susie', susie_time, 0] + [True, 0] + dgp_args + metrics
 		)
 		# Now apply BLiP on top of susie
 		t0 = time.time()
@@ -376,7 +390,7 @@ def single_seed_sim(
 		blip_time = time.time() - t0
 		metrics = power_fdr_metrics(detections, beta=beta, hatSig=hatSig, how='cgs')
 		output.append(
-			['susie + BLiP', "susie", susie_time, blip_time] + metrics + [True, 0] + dgp_args
+			['susie + BLiP', "susie", susie_time, blip_time] + [True, 0] + dgp_args + metrics
 		)
 		print(f"At seed={seed}, dgp_args={dgp_args}, finished SuSiE at time {utilities.elapsed(global_t0)}.")
 		sys.stdout.flush()

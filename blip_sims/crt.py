@@ -7,7 +7,7 @@ from scipy import stats
 import sklearn.linear_model
 import warnings
 
-from . import tree_methods
+from . import tree_methods, utilities
 try:
 	import pyblip
 except ModuleNotFoundError:
@@ -104,7 +104,7 @@ class MultipleDCRT():
 			self.Sigma, levels=levels, max_size=max_size, return_levels=True
 		)
 
-	def multiple_pvals(self, levels=0, max_size=100, **kwargs):
+	def multiple_pvals(self, levels=0, max_size=100, verbose=False, **kwargs):
 		"""
 		Computes many (group) p-values.
 		"""
@@ -112,7 +112,7 @@ class MultipleDCRT():
 			self.create_tree(levels=levels, max_size=max_size)
 		
 		# Todo: could speed up computation using nested structure
-		for node in self.pTree.nodes:
+		for node in utilities.vqdm(self.pTree.nodes, verbose=verbose):
 			node.p = self.p_value(
 				inds=list(node.group),
 				node=node,
