@@ -45,9 +45,13 @@ COLUMNS = [
 	'n_indiv_disc',
 	'med_purity',
 ]
-# n disc
+# cum. freq. of disc. group sizes
 for j in range(MAX_COUNT_SIZE):
 	COLUMNS.append(f"ntd_le_{j+1}")
+# cum. freq. of disc. group purities
+PURITIES = np.flip(np.linspace(0.1, 1, 10))
+for pt in PURITIES:
+	COLUMNS.append(f"purity_ge_{pt}")
 
 def purity(region, hatSig):
 	if len(region) == 1:
@@ -66,12 +70,18 @@ def power_fdr_metrics(rej, beta, hatSig, how='cgs'):
 		# other metrics
 		med_group_size = np.median(gsizes)
 		n_indiv_disc = len([x for x in rej if len(x) == 1 and np.any(beta[x]) != 0])
-		med_purity = np.median([purity(x, hatSig) for x in rej])
+		disc_purities = np.array([purity(x, hatSig) for x in rej])
+		med_purity = np.median(disc_purities)
 		ntd = len(rej) - nfd
 		metrics = [power, ntd, nfd, fdr, med_group_size, n_indiv_disc, med_purity]
+		# discovered sizes frequencies
 		for j in range(1, MAX_COUNT_SIZE+1):
 			freqj = np.sum(((gsizes <= j) * (tp_flags)).astype(int))
 			metrics.append(freqj)
+		# purity frequencies
+		for pt in PURITIES:
+			ptcount = np.sum(((disc_purities >= pt) * (tp_flags)).astype(int))
+			metrics.append(ptcount)
 		return metrics 
 	else:
 		return power_fdr_metrics(
@@ -307,15 +317,18 @@ def single_seed_sim(
 				)
 
 				# Calculate PIPs and cand groups
-				for cgroup in args.get('cgroups', ['all']):
+				hatC = np.corrcoef(X.T)
+				for cgroup in args.get('cgroups', ['all', 'all_pure']):
 					t0 = time.time()
-					if cgroup == 'all':
+					if cgroup == 'all' or cgroup == 'all_pure':
 						cand_groups = pyblip.create_groups.all_cand_groups(
 							samples=inclusions,
 							q=q,
 							max_pep=max_pep,
 							max_size=max_size,
-							prenarrow=prenarrow
+							prenarrow=prenarrow,
+							min_purity=0.0 if cgroup == 'all' else 0.5,
+							corr_matrix=hatC,
 						)
 					elif cgroup == 'seq':
 						cand_groups = pyblip.create_groups.sequential_groups(
