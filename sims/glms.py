@@ -49,7 +49,7 @@ COLUMNS = [
 for j in range(MAX_COUNT_SIZE):
 	COLUMNS.append(f"ntd_le_{j+1}")
 # cum. freq. of disc. group purities
-PURITIES = np.flip(np.linspace(0.1, 1, 10))
+PURITIES = np.round(np.flip(np.linspace(0.1, 1, 10)), 2)
 for pt in PURITIES:
 	COLUMNS.append(f"purity_ge_{pt}")
 
@@ -131,6 +131,7 @@ def single_seed_sim(
 		return_cov=True
 	)
 	X, y, beta, V = generate_regression_data(**sample_kwargs)
+	hatC = np.corrcoef(X.T)
 	hatSig = np.corrcoef(X.T) # for purity computations
 
 	# Parse args for cand groups
@@ -317,7 +318,6 @@ def single_seed_sim(
 				)
 
 				# Calculate PIPs and cand groups
-				hatC = np.corrcoef(X.T)
 				for cgroup in args.get('cgroups', ['all', 'all_pure']):
 					t0 = time.time()
 					if cgroup == 'all' or cgroup == 'all_pure':
@@ -383,28 +383,30 @@ def single_seed_sim(
 			['susie', 'susie', susie_time, 0] + [True, 0] + dgp_args + metrics
 		)
 		# Now apply BLiP on top of susie
-		t0 = time.time()
-		cand_groups = pyblip.create_groups.susie_groups(
-			alphas=susie_alphas, 
-			X=X, 
-			q=q,
-			prenarrow=prenarrow,
-			max_size=max_size,
-			max_pep=max_pep
-		)
-		detections = pyblip.blip.BLiP(
-			cand_groups=cand_groups,
-			q=q,
-			error='fdr',
-			max_pep=max_pep,
-			perturb=True,
-			deterministic=True
-		)
-		blip_time = time.time() - t0
-		metrics = power_fdr_metrics(detections, beta=beta, hatSig=hatSig, how='cgs')
-		output.append(
-			['susie + BLiP', "susie", susie_time, blip_time] + [True, 0] + dgp_args + metrics
-		)
+		for cgroup in args.get('cgroups', ['all', 'all_pure']):
+			t0 = time.time()
+			cand_groups = pyblip.create_groups.susie_groups(
+				alphas=susie_alphas, 
+				X=X, 
+				q=q,
+				prenarrow=prenarrow,
+				max_size=max_size,
+				max_pep=max_pep,
+				min_purity=0.0 if cgroup == 'all' else 0.5,
+			)
+			detections = pyblip.blip.BLiP(
+				cand_groups=cand_groups,
+				q=q,
+				error='fdr',
+				max_pep=max_pep,
+				perturb=True,
+				deterministic=True
+			)
+			blip_time = time.time() - t0
+			metrics = power_fdr_metrics(detections, beta=beta, hatSig=hatSig, how='cgs')
+			output.append(
+				['susie + BLiP', cgroup, susie_time, blip_time] + [True, 0] + dgp_args + metrics
+			)
 		print(f"At seed={seed}, dgp_args={dgp_args}, finished SuSiE at time {utilities.elapsed(global_t0)}.")
 		sys.stdout.flush()
 		
