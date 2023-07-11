@@ -206,7 +206,7 @@ def create_dap_prefix(today, hour, **kwargs):
 	file_prefix += "/"
 	# Ensure directory exists
 	if not os.path.exists(file_prefix):
-		os.makedirs(file_prefix)
+		os.makedirs(file_prefix, exist_ok=True)
 	return file_prefix + "seed"
 
 def rejset_power(rej_sets, beta):
