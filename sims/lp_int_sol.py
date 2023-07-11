@@ -169,7 +169,7 @@ def main(args):
 				for sparsity in args.get('sparsity', [0.05]):
 					outputs = utilities.apply_pool(
 						func=single_seed_sim,
-						seed=list(range(1, reps+1)), 
+						seed=list(range(seed_start, reps+seed_start)), 
 						constant_inputs=dict(
 							covmethod=covmethod,
 							kappa=kappa,
