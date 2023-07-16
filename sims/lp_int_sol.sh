@@ -1,5 +1,5 @@
 #!/bin/sh
-#SBATCH -p janson_cascade #Partition to submit to
+#SBATCH -p partition_name #Partition to submit to
 #SBATCH -N 1 #Number of nodes
 #SBATCH -n 47 #Number of cores
 #SBATCH -t 7-00:00 #Runtime in (D-HH:MM)
@@ -8,31 +8,35 @@
 #SBATCH -e ../output/lp_int_sol_%j.err #File to which standard err will be written
 #SBATCH --mail-type=ALL #Type of email notification- BEGIN,END,FAIL,ALL
 
-NREPS=128
-NPROCESSES=47
+## Change the number of repliactions/processes
+NREPS=1
+NPROCESSES=1 
 
 ARGS="
-        --reps $NREPS
-        --num_processes $NPROCESSES
+	--reps $NREPS
+	--num_processes $NPROCESSES
 	--p 1000
-	--kappa start0.025end1numvals20
-	--method [ar1,ver,qer]
+	--kappa start0.1end1numvals19
+	--method [ark]
+	--k 5
+	--coeff_size 2
+	--max_corr 0.99
 "
 
-# Install python/anaconda, activate base environment
-module purge
-module load Gurobi/9.1.2
-module load Anaconda3/5.0.1-fasrc02
-source activate adaptexper1
+# # Install python/anaconda, activate base environment
+# module purge
+# module load Gurobi/9.1.2
+# module load Anaconda3/5.0.1-fasrc02
+# source activate adaptexper1
 
 
-# Load R 4.0.2
-module load R/4.0.2-fasrc01
+# # Load R 4.0.2
+# module load R/4.0.2-fasrc01
 
-# Load packages
-export R_LIBS_USER=$HOME/apps/R_4.0.2:$R_LIBS_USERi
+# # Load packages
+# export R_LIBS_USER=$HOME/apps/R_4.0.2:$R_LIBS_USERi
 
 
 python3.9 lp_int_sol.py $ARGS
 
-module purge
+#module purge

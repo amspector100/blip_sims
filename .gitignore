@@ -13,8 +13,10 @@ profile
 sims/hparam_search.py
 sims/fdr_comp.py
 sims/cgroups.py
-#sims/crtcompv2.py
-#sims/bsize.py
+
+# scripts to transfer from cluster
+transfer.sh
+transferv2.sh
 
 # _____ R Defaults _______
 # History files

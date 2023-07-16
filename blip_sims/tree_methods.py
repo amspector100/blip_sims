@@ -181,7 +181,7 @@ class PTree():
 				output.extend(self.find_subtree(child))
 			return output
 
-def corr_matrix_to_pval_tree(corr_matrix, levels, max_size, return_levels):
+def corr_matrix_to_pval_tree(corr_matrix, levels, max_size, return_levels=False):
 	"""
 	Hierarchically clusters based on a distance matrix,
 	then cuts the clustering tree at ``levels`` different

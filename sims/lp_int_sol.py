@@ -56,7 +56,7 @@ def single_seed_sim(
 		coeff_dist=args.get('coeff_dist', ['normal'])[0],
 		max_corr=args.get('max_corr', [0.99])[0],
 		k=args.get('k', [2])[0],
-		alpha0=args.get("alpha0", [0.1])[0],
+		alpha0=args.get("alpha0", [0.2])[0],
 	)
 
 	# Run linear spike slab
@@ -66,7 +66,7 @@ def single_seed_sim(
 	)
 	nsample = args.get('nsample', [1000])[0]
 	chains = args.get('chains', [10])[0]
-	bsize = args.get('bsize', [1])[0]
+	bsize = args.get('bsize', [5])[0]
 	model.sample(N=nsample, chains=chains, bsize=bsize)
 	inclusions = model.betas != 0
 
