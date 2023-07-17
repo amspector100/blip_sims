@@ -17,10 +17,11 @@ The file ``final_sim_plots.ipynb`` is a jupyter notebook which contains (1) code
 In particular, the main simulations in the paper can be replicated using the following .sh files:
 
 - Figures 1, C.2, C.3: ``sims/lp_int_sol.sh``
-- Figures 2, 3, 4, E.4, F.7, F.10, F.11, F.12, F.14: ``sims/glms.sh``
+- Figures 2, 3, 4, F.7, F.10, F.11, F.12, F.14: ``sims/glms.sh``
 - Figures F.16, F.17, F.18: ``sims/changepoint.sh``
 - Figure E.5: ``sims/susie_pips.sh``
 - Figure F.13: ``sims/weight_sensitivity.sh``
+- Figure E.4: ``sims/convergence.sh``
 - Figures A.1, F.6, F.8, F.9: directly in ``final_sim_plots.ipynb``
 
 Many of these simulations are very computationally expensive, so you may need to use a computing cluster to run them.
