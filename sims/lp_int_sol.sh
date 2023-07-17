@@ -18,9 +18,8 @@ ARGS="
 	--p 1000
 	--kappa start0.1end1numvals19
 	--method [ark]
-	--k 5
+	--k 3
 	--coeff_size 2
-	--max_corr 0.99
 "
 
 # # Install python/anaconda, activate base environment
