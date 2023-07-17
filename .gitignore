@@ -14,6 +14,11 @@ sims/hparam_search.py
 sims/fdr_comp.py
 sims/cgroups.py
 
+# final plots
+extra_presentation_plots.ipynb
+final-plots/*
+presentation_plots/*
+
 # scripts to transfer from cluster
 transfer.sh
 transferv2.sh
