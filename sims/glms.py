@@ -44,6 +44,9 @@ COLUMNS = [
 	'med_group_size',
 	'n_indiv_disc',
 	'med_purity',
+	"hatp0",
+	"hatsigma2",
+	"hattau2",
 ]
 # cum. freq. of disc. group sizes
 for j in range(MAX_COUNT_SIZE):
@@ -59,7 +62,7 @@ def purity(region, hatSig):
 	hatSigR = hatSig[region][:, region]
 	return np.abs(hatSigR).min()
 
-def power_fdr_metrics(rej, beta, hatSig, how='cgs'):
+def power_fdr_metrics(rej, beta, hatSig, how='cgs', model=None):
 	# depending on the object involved call different fns
 	if how != 'cgs':
 		# main metrics
@@ -74,6 +77,13 @@ def power_fdr_metrics(rej, beta, hatSig, how='cgs'):
 		med_purity = np.median(disc_purities)
 		ntd = len(rej) - nfd
 		metrics = [power, ntd, nfd, fdr, med_group_size, n_indiv_disc, med_purity]
+		# hatp0, hatsigma2, hattau2
+		if model is not None:
+			metrics.append(model.p0s.mean())
+			metrics.append(model.sigma2s.mean())
+			metrics.append(model.tau2s.mean())
+		else:
+			metrics.extend([np.nan, np.nan, np.nan])
 		# discovered sizes frequencies
 		for j in range(1, MAX_COUNT_SIZE+1):
 			freqj = np.sum(((gsizes <= j) * (tp_flags)).astype(int))
@@ -85,10 +95,11 @@ def power_fdr_metrics(rej, beta, hatSig, how='cgs'):
 		return metrics 
 	else:
 		return power_fdr_metrics(
-			[list(x.group) for x in rej], 
+			rej=[list(x.group) for x in rej], 
 			beta=beta,
 			hatSig=hatSig,
-			how='rejset'
+			how='rejset',
+			model=model,
 		)
 
 def single_seed_sim(
@@ -311,7 +322,7 @@ def single_seed_sim(
 				else:
 					rej = []
 				rej = [[r] for r in rej]
-				metrics = power_fdr_metrics(rej, beta=beta, hatSig=hatSig, how='rejset')
+				metrics = power_fdr_metrics(rej, beta=beta, hatSig=hatSig, how='rejset', model=model)
 				basename = mname.split("+")[0] + "(indiv only)"
 				output.append(
 					[basename, 'none', mtime, 0] + [well_specified, nsample] + dgp_args + metrics
@@ -364,7 +375,7 @@ def single_seed_sim(
 						deterministic=True
 					)
 					blip_time = time.time() - t0
-					metrics = power_fdr_metrics(detections, beta=beta, hatSig=hatSig, how='cgs')
+					metrics = power_fdr_metrics(detections, beta=beta, hatSig=hatSig, how='cgs', model=model)
 					output.append(
 						[mname, cgroup, mtime, blip_time] + [well_specified, nsample] + dgp_args + metrics
 					)

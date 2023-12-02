@@ -4,6 +4,8 @@ This repository contains all the code to replicate the experiments from the pape
 Bayesian Linear Programming." Running these scripts requires a python environment with ``pyblip`` installed, which can be installed using
  ``python3.9 -m pip install -U pyblip.``
 
+ All other packages can be installed using pip or conda as necessary. Note that to run simulations using SuSiE and BCP (Bayesian change-point detection), you will need to install rpy2 which requires a working installation of R with the ``susieR`` and ``bcp`` packages installed, respectively. For some simulations, you will also need to clone and install [DAP-G](https://github.com/xqwen/dap). Please clone DAP-G into a directory parallel to the ``blip_sims`` directory (i.e. the one containing this README).  If you have trouble, you can also set the option ``run_dap=0`` in ``glms.sh`` and not replicate the DAP-G experiments.
+
  Note that any figures from the real applications (Section 5 and Appendices G, H) can be reproduced using the other attached repositories.
 
 ## Overview
@@ -24,4 +26,4 @@ In particular, the main simulations in the paper can be replicated using the fol
 - Figure E.4: ``sims/convergence.sh``
 - Figures A.1, F.6, F.8, F.9: directly in ``final_sim_plots.ipynb``
 
-Many of these simulations are very computationally expensive, so you may need to use a computing cluster to run them.
+Some of these simulations are very computationally expensive, so you may need to use a computing cluster to run them. For example, computing ``sims/glms.sh`` should take 1-2 days using a few hundred cores. Others are cheap; for example, ``sims/susie_pips.sh`` and ``sims/weight_sensitivity.sh`` should be very quick.

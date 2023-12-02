@@ -1,4 +1,4 @@
-#!/bin/sh
+/#!/bin/sh
 #SBATCH -p partition_name #Partition to submit to
 #SBATCH -N 1 #Number of nodes
 #SBATCH -n 32 #Number of cores
@@ -50,7 +50,7 @@ HIGH_ARGS_COMMON="
 "
 
 HIGH_P1="${HIGH_ARGS_COMMON}
-	--sparsity [0.01]
+	--sparsity [0.01,0.05]
 	--run_dap [1]	
 	--run_crt [1]
 	--levels 8
