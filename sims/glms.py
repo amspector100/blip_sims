@@ -45,8 +45,11 @@ COLUMNS = [
 	'n_indiv_disc',
 	'med_purity',
 	"hatp0",
+	"hatp0_sd",
 	"hatsigma2",
+	"hatsigma2_sd",
 	"hattau2",
+	"hattau2_sd",
 ]
 # cum. freq. of disc. group sizes
 for j in range(MAX_COUNT_SIZE):
@@ -79,11 +82,11 @@ def power_fdr_metrics(rej, beta, hatSig, how='cgs', model=None):
 		metrics = [power, ntd, nfd, fdr, med_group_size, n_indiv_disc, med_purity]
 		# hatp0, hatsigma2, hattau2
 		if model is not None:
-			metrics.append(model.p0s.mean())
-			metrics.append(model.sigma2s.mean())
-			metrics.append(model.tau2s.mean())
+			metrics.extend([model.p0s.mean(), model.p0s.std()])
+			metrics.extend([model.sigma2s.mean(), model.sigma2s.std()])
+			metrics.extend([model.tau2s.mean(), model.tau2s.std()])
 		else:
-			metrics.extend([np.nan, np.nan, np.nan])
+			metrics.extend([np.nan, np.nan, np.nan, np.nan, np.nan, np.nan])
 		# discovered sizes frequencies
 		for j in range(1, MAX_COUNT_SIZE+1):
 			freqj = np.sum(((gsizes <= j) * (tp_flags)).astype(int))
@@ -172,50 +175,6 @@ def single_seed_sim(
 		print(f"At seed={seed}, dgp_args={dgp_args}, finished DAP at time {utilities.elapsed(global_t0)}.")
 		sys.stdout.flush()
 		
-	# if args.get("run_finemap", [False])[0]:
-	# 	t0 = time.time()
-	# 	rej_finemap, cand_groups = blip_sims.finemap.run_finemap(
-	# 		file_prefix=dap_prefix + "_finemap" + str(seed),
-	# 		X=X,
-	# 		y=y,
-	# 		q=q,
-	# 		pi1=args.get("finemap_pi1", [1 / p])[0],
-	# 		max_nsignal=args.get("max_nsignal", [int(1.2 * sparsity * p)])[0],
-	# 		n_iter=args.get("n_iter_finemap", [10000])[0],
-	# 		n_config=args.get("n_config_finemap", [50000])[0],
-	# 		sss_tol=args.get("sss_tol", [0.001])[0],
-	# 		max_pep=max_pep,
-	# 		max_size=max_size,
-	# 		prenarrow=prenarrow,
-	# 		corr_config=args.get("corr_config", [0.95])[0],
-	# 		finemap_chains=finemap_chains,
-	# 	)
-	# 	# For fairness same max size (also allows disjointness)
-	# 	rej_finemap = [x for x in rej_finemap if len(x) <= max_size]
-	# 	fmap_time = time.time() - t0
-	# 	t0 = time.time()
-	# 	detections = pyblip.blip.BLiP(
-	# 		cand_groups=cand_groups,
-	# 		q=q,
-	# 		error='fdr',
-	# 		max_pep=max_pep,
-	# 		perturb=True,
-	# 		deterministic=True
-	# 	)
-	# 	blip_time = time.time() - t0
-	# 	detect_sets = [
-	# 		list(cg.group) for cg in detections
-	# 	]
-	# 	for method, csets, btime in zip(
-	# 		['FINEMAP', 'FINEMAP + BLiP'],
-	# 		[rej_finemap, detect_sets],
-	# 		[0, blip_time],
-	# 	):
-	# 		metrics = power_fdr_metrics(csets, beta=beta, hatSig=hatSig, how='rejset')
-	# 		output.append(
-	# 			[method, "all", fmap_time, btime] + [True, 0] + dgp_args + metrics
-	# 		)
-
 	# # F-tests + FBH/Yekutieli
 	# if kappa > 1 and args.get('run_ftests', [False])[0]:
 	# 	t0 = time.time()
