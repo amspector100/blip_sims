@@ -45,11 +45,11 @@ COLUMNS = [
 	'n_indiv_disc',
 	'med_purity',
 	"hatp0",
-	"hatp0_sd",
+	"hatp0_quantile",
 	"hatsigma2",
-	"hatsigma2_sd",
+	"hatsigma2_quantile",
 	"hattau2",
-	"hattau2_sd",
+	"hattau2_quantile",
 ]
 # cum. freq. of disc. group sizes
 for j in range(MAX_COUNT_SIZE):
@@ -65,7 +65,9 @@ def purity(region, hatSig):
 	hatSigR = hatSig[region][:, region]
 	return np.abs(hatSigR).min()
 
-def power_fdr_metrics(rej, beta, hatSig, how='cgs', model=None):
+def power_fdr_metrics(
+	rej, beta, hatSig, how='cgs', model=None
+):
 	# depending on the object involved call different fns
 	if how != 'cgs':
 		# main metrics
@@ -82,9 +84,11 @@ def power_fdr_metrics(rej, beta, hatSig, how='cgs', model=None):
 		metrics = [power, ntd, nfd, fdr, med_group_size, n_indiv_disc, med_purity]
 		# hatp0, hatsigma2, hattau2
 		if model is not None:
-			metrics.extend([model.p0s.mean(), model.p0s.std()])
-			metrics.extend([model.sigma2s.mean(), model.sigma2s.std()])
-			metrics.extend([model.tau2s.mean(), model.tau2s.std()])
+			p0star = np.mean(beta == 0)
+			metrics.extend([model.p0s.mean(), np.mean(model.p0s <= p0star)])
+			metrics.extend([model.sigma2s.mean(), np.mean(model.sigma2s <= 1)])
+			tau2_star = np.mean(beta[beta != 0]**2)
+			metrics.extend([model.tau2s.mean(), np.mean(model.tau2s <= tau2_star)])
 		else:
 			metrics.extend([np.nan, np.nan, np.nan, np.nan, np.nan, np.nan])
 		# discovered sizes frequencies
