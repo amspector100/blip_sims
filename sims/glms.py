@@ -24,6 +24,8 @@ MAX_COUNT_SIZE = 25
 COLUMNS = [
 	'method',
 	'cgroups',
+	'p0_a0',
+	'p0_b0',
 	'model_time',
 	'blip_time',
 	'well_specified',
@@ -45,10 +47,13 @@ COLUMNS = [
 	'n_indiv_disc',
 	'med_purity',
 	"hatp0",
+	"hatp0_sd",
 	"hatp0_quantile",
 	"hatsigma2",
+	"hatsigma2_sd",
 	"hatsigma2_quantile",
 	"hattau2",
+	"hattau2_sd",
 	"hattau2_quantile",
 ]
 # cum. freq. of disc. group sizes
@@ -85,12 +90,12 @@ def power_fdr_metrics(
 		# hatp0, hatsigma2, hattau2
 		if model is not None:
 			p0star = np.mean(beta == 0)
-			metrics.extend([model.p0s.mean(), np.mean(model.p0s <= p0star)])
-			metrics.extend([model.sigma2s.mean(), np.mean(model.sigma2s <= 1)])
+			metrics.extend([model.p0s.mean(), model.p0s.std(), np.mean(model.p0s <= p0star)])
+			metrics.extend([model.sigma2s.mean(), model.sigma2s.std(), np.mean(model.sigma2s <= 1)])
 			tau2_star = np.mean(beta[beta != 0]**2)
-			metrics.extend([model.tau2s.mean(), np.mean(model.tau2s <= tau2_star)])
+			metrics.extend([model.tau2s.mean(), model.tau2s.std(), np.mean(model.tau2s <= tau2_star)])
 		else:
-			metrics.extend([np.nan, np.nan, np.nan, np.nan, np.nan, np.nan])
+			metrics.extend([np.nan for _ in range(9)])
 		# discovered sizes frequencies
 		for j in range(1, MAX_COUNT_SIZE+1):
 			freqj = np.sum(((gsizes <= j) * (tp_flags)).astype(int))
@@ -119,6 +124,8 @@ def single_seed_sim(
 	sparsity,
 	k,
 	coeff_size,
+	p0_a0,
+	p0_b0,
 	args,
 	dap_prefix,
 	tol=1e-3
@@ -174,7 +181,7 @@ def single_seed_sim(
 		dap_time = time.time() - t0
 		metrics = power_fdr_metrics(rej_dap, beta=beta, hatSig=hatSig, how='rejset')
 		output.append(
-			["dap-g", "NA", dap_time, 0] +  [True, 0] + dgp_args + metrics
+			["dap-g", "NA", np.nan, np.nan, dap_time, 0] +  [True, 0] + dgp_args + metrics
 		)
 		print(f"At seed={seed}, dgp_args={dgp_args}, finished DAP at time {utilities.elapsed(global_t0)}.")
 		sys.stdout.flush()
@@ -193,7 +200,7 @@ def single_seed_sim(
 	# 	for mname, rej in zip(['FBH', 'Yekutieli'], [rej_fbh, rej_yek]):
 	# 		metrics = power_fdr_metrics(rej, beta=beta, hatSig=hatSig, how='cgs')
 	# 		output.append(
-	# 			[mname, "fbh", mtime, 0] + [True, 0] + dgp_args + metrics
+	# 			[mname, "fbh", np.nan, np.nan, mtime, 0] + [True, 0] + dgp_args + metrics
 	# 		)
 
 	# CRT + FBH/Yekutieli
@@ -213,7 +220,7 @@ def single_seed_sim(
 		):
 			metrics = power_fdr_metrics(rej, beta=beta, hatSig=hatSig, how='cgs')
 			output.append(
-				[mname, "tree", mtime, 0] + [True, 0] + dgp_args + metrics
+				[mname, "tree", np.nan, np.nan, mtime, 0] + [True, 0] + dgp_args + metrics
 			)
 		print(f"At seed={seed}, dgp_args={dgp_args}, finished CRT at time {utilities.elapsed(global_t0)}.")
 		sys.stdout.flush()
@@ -232,7 +239,6 @@ def single_seed_sim(
 			tau2 = 1
 			sigma2 = 1
 			update = True
-
 		# Method type 1: BLiP + SpikeSlab
 		# Run Gaussian sampler if (1) not well-specified or (2) gaussian response
 		if (y_dist == 'gaussian' or not well_specified) and args.get('run_lss', [True])[0]:
@@ -246,6 +252,9 @@ def single_seed_sim(
 				update_tau2=update,
 				sigma2=sigma2,
 				update_sigma2=update,
+				# the following are ignored unless well_specified=False and update=True
+				p0_a0=p0_a0,
+				p0_b0=p0_b0,
 			)
 			models = [lss_model]
 			method_names = ['LSS + BLiP']
@@ -263,6 +272,9 @@ def single_seed_sim(
 				update_tau2=update,
 				sigma2=sigma2,
 				update_sigma2=update,
+				# the following are ignored unless well_specified=False and update=True
+				p0_a0=p0_a0,
+				p0_b0=p0_b0,
 			))
 			method_names.append('PSS + BLiP')
 
@@ -288,7 +300,7 @@ def single_seed_sim(
 				metrics = power_fdr_metrics(rej, beta=beta, hatSig=hatSig, how='rejset', model=model)
 				basename = mname.split("+")[0] + "(indiv only)"
 				output.append(
-					[basename, 'none', mtime, 0] + [well_specified, nsample] + dgp_args + metrics
+					[basename, 'none', p0_a0, p0_b0, mtime, 0] + [well_specified, nsample] + dgp_args + metrics
 				)
 
 				# Calculate PIPs and cand groups
@@ -340,7 +352,7 @@ def single_seed_sim(
 					blip_time = time.time() - t0
 					metrics = power_fdr_metrics(detections, beta=beta, hatSig=hatSig, how='cgs', model=model)
 					output.append(
-						[mname, cgroup, mtime, blip_time] + [well_specified, nsample] + dgp_args + metrics
+						[mname, cgroup, p0_a0, p0_b0, mtime, blip_time] + [well_specified, nsample] + dgp_args + metrics
 					)
 					print(f"At seed={seed}, dgp_args={dgp_args}, finished {mname} at time {utilities.elapsed(global_t0)}.")
 					sys.stdout.flush()
@@ -354,7 +366,7 @@ def single_seed_sim(
 		susie_time = time.time() - t0
 		metrics = power_fdr_metrics(susie_sets, beta=beta, hatSig=hatSig, how='rejset')
 		output.append(
-			['susie', 'susie', susie_time, 0] + [True, 0] + dgp_args + metrics
+			['susie', 'susie', np.nan, np.nan, susie_time, 0] + [True, 0] + dgp_args + metrics
 		)
 		# Now apply BLiP on top of susie
 		for cgroup in args.get('cgroups', ['all', 'all_pure']):
@@ -379,7 +391,7 @@ def single_seed_sim(
 			blip_time = time.time() - t0
 			metrics = power_fdr_metrics(detections, beta=beta, hatSig=hatSig, how='cgs')
 			output.append(
-				['susie + BLiP', cgroup, susie_time, blip_time] + [True, 0] + dgp_args + metrics
+				['susie + BLiP', cgroup, np.nan, np.nan, susie_time, blip_time] + [True, 0] + dgp_args + metrics
 			)
 		print(f"At seed={seed}, dgp_args={dgp_args}, finished SuSiE at time {utilities.elapsed(global_t0)}.")
 		sys.stdout.flush()
@@ -406,6 +418,8 @@ def main(args):
 	# Run outputs
 	time0 = time.time()
 	all_outputs = []
+	p0_a0s = args.pop("p0_a0", [1])
+	p0_b0s = args.pop("p0_b0", [1])
 	for covmethod in args.get('covmethod', ['ark']):
 		for p in args.get('p', [500]):
 			for kappa in args.get('kappa',[0.2]):
@@ -413,46 +427,49 @@ def main(args):
 					for k in args.get('k', [1]):
 						for y_dist in args.get('y_dist', ['gaussian']):
 							for coeff_size in args.get('coeff_size', [1]):
-								constant_inputs=dict(
-									y_dist=y_dist,
-									covmethod=covmethod,
-									kappa=kappa,
-									p=p,
-									sparsity=sparsity,
-									k=k,
-									coeff_size=coeff_size,
-									global_t0=time0,
-								)
-								msg = f"Finished with {constant_inputs}"
-								dap_prefix = blip_sims.utilities.create_dap_prefix(
-									today=today,
-									hour=hour,
-									**constant_inputs,
-								)
-								constant_inputs['args'] = args
-								constant_inputs['dap_prefix'] = dap_prefix
-								outputs = utilities.apply_pool(
-									func=single_seed_sim,
-									seed=list(range(seed_start, reps+seed_start)), 
-									constant_inputs=constant_inputs,
-									num_processes=num_processes, 
-								)
-								msg += f" at {np.around(time.time() - time0, 2)}"
-								print(msg)
-								os.rmdir(os.path.dirname(dap_prefix))
-								for out in outputs:
-									all_outputs.extend(out)
+								for p0_a0, p0_b0 in zip(p0_a0s, p0_b0s):
+									constant_inputs=dict(
+										y_dist=y_dist,
+										p0_a0=p0_a0,
+										p0_b0=p0_b0,
+										covmethod=covmethod,
+										kappa=kappa,
+										p=p,
+										sparsity=sparsity,
+										k=k,
+										coeff_size=coeff_size,
+										global_t0=time0,
+									)
+									msg = f"Finished with {constant_inputs}"
+									dap_prefix = blip_sims.utilities.create_dap_prefix(
+										today=today,
+										hour=hour,
+										**constant_inputs,
+									)
+									constant_inputs['args'] = args
+									constant_inputs['dap_prefix'] = dap_prefix
+									outputs = utilities.apply_pool(
+										func=single_seed_sim,
+										seed=list(range(seed_start, reps+seed_start)), 
+										constant_inputs=constant_inputs,
+										num_processes=num_processes, 
+									)
+									msg += f" at {np.around(time.time() - time0, 2)}"
+									print(msg)
+									os.rmdir(os.path.dirname(dap_prefix))
+									for out in outputs:
+										all_outputs.extend(out)
 
-								# Save
-								out_df = pd.DataFrame(all_outputs, columns=COLUMNS)
-								out_df.to_csv(result_path, index=False)
-								groupers = [
-									'method', 'cgroups', 'y_dist', 'covmethod', 'kappa', 
-									'p', 'sparsity', 'k', 'well_specified', 'nsample'
-								]
-								meas = ['model_time', 'blip_time', 'power', 'ntd', 'fdr', 'med_group_size', 'med_purity', 'n_indiv_disc']
-								summary_df = out_df.groupby(groupers)[meas].mean()
-								print(summary_df.reset_index())
+									# Save
+									out_df = pd.DataFrame(all_outputs, columns=COLUMNS)
+									out_df.to_csv(result_path, index=False)
+									groupers = [
+										'method', 'p0_a0', 'p0_b0', 'kappa', 'p',
+										'sparsity', 'k', 'well_specified', 'nsample'
+									]
+									meas = ['model_time', 'blip_time', 'power', 'ntd', 'fdr', 'med_group_size', 'n_indiv_disc']
+									summary_df = out_df.groupby(groupers)[meas].mean()
+									print(summary_df.reset_index())
 
 
 
