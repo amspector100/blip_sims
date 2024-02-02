@@ -17,12 +17,28 @@ The directory ``sims/`` contains the code which actually runs the simulations. I
 
 The file ``final_sim_plots.ipynb`` is a jupyter notebook which contains (1) code to replicate the concrete examples in the paper and (2) the code used to generate the final plots for the paper. 
 
-In particular, the main simulations in the paper can be replicated using the following scripts (their respective .sh files show how to use them). Note that the figure names line up with arXiv version v5 (to be released in the next 1-2 weeks).
+In particular, the main simulations in the paper can be replicated using the following scripts (their respective .sh files show how to use them). 
+
+### Replication for JASA figure numbering
 
 - Figures 1, C.2, C.3: ``sims/lp_int_sol.sh``
-- Figures 2, 3, 4, F.7, F.10, F.11, F.12, F.14: ``sims/glms.sh``
-- Figures F.16, F.17, F.18: ``sims/changepoint.sh``
-- Figure E.5: ``sims/susie_pips.sh``
-- Figure F.13: ``sims/weight_sensitivity.sh``
-- Figure E.4: ``sims/convergence.sh``
-- Figures A.1, F.6, F.8, F.9: directly in ``final_sim_plots.ipynb``
+- Figures 2, 3, 4, F.6, F.9, F.10, F.11, F.12, F.13, F.14, F.16: ``sims/glms.sh``
+- Figures F.17, F.18, F.19, F.20: ``sims/changepoint.sh``
+- Figure E.4: ``sims/susie_pips.sh``
+- Figure F.15: ``sims/weight_sensitivity.sh``
+- Figure 5: ``sims/convergence.sh``
+- Figures A.1, F.5, F.7, F.8: directly in ``final_sim_plots.ipynb``
+
+Any figures not listed here can be reproduced in https://github.com/amspector100/ukbb_blip (for the fine-mapping analysis) or https://github.com/amspector100/DeblendingStarfields (for the astronomical application).
+
+### Replication for arXiv figure numbering
+
+- Figures 1, 10, 11: ``sims/lp_int_sol.sh``
+- Figures 2, 3, 4, 15: ``sims/glms.sh``
+- Figures 17, 18, 19, 20: ``sims/changepoint.sh``
+- Figure 13: ``sims/susie_pips.sh``
+- Figure 16: ``sims/weight_sensitivity.sh``
+- Figure 12: ``sims/convergence.sh``
+- Figures 9, 14: directly in ``final_sim_plots.ipynb``
+
+Any figures not listed here can be reproduced in https://github.com/amspector100/ukbb_blip (for the fine-mapping analysis) or https://github.com/amspector100/DeblendingStarfields (for the astronomical application).

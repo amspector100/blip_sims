@@ -62,6 +62,18 @@ HIGH_P2="${HIGH_ARGS_COMMON}
 	--levels 8
 "
 
+PRIOR_MISPEC="${HIGH_ARGS_COMMON}
+        --sparsity [0.01,0.05]
+        --run_dap 0
+        --run_crt 0
+        --run_susie 0
+        --well_specified 0
+        --kappa [1.1]
+        --p0_a0 [1,45,90,180,270]
+        --p0_b0 [1,5,10,20,30]
+"
+
+
 ## Probit setting
 BIN_ARGS="
 	--reps $NREPS
@@ -83,13 +95,13 @@ BIN_ARGS="
 	--levels 8
 "
 
-## Load whatever modules are needed on a cluster
-
-## Main simulation setting
+## Main simulation setting (Figure 2 and related)
 python3.9 glms.py $HIGH_P1
 python3.9 glms.py $HIGH_P2
+## prior misspecification plots 
+python3.9 glms.py $PRIOR_MISPEC
 ## probit regresion
 python3.9 glms.py $BIN_ARGS
-## simulation varying the dimensionality p
+## simulation varying the dimensional of X
 python3.9 glms.py $VP_ARGS
 
